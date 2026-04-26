@@ -42,15 +42,6 @@
   - [ ] Verify transcript stored as markdown with YAML frontmatter
   - [ ] Verify poka-yoke skips re-fetch on second run
 
-### Homebrew Release #deployment
-
-- [ ] **Publish v0.1.0**: Tag release, fill SHA256, create tap repo
-  - [ ] `make release VERSION=0.1.0` → bump `__version__`, commit, tag
-  - [ ] Generate tarball SHA256 from tagged release
-  - [ ] Run `brew update-python-resources Formula/yt-analyst.rb` to fill resource hashes
-  - [ ] Create `Startr/homebrew-tools` tap repo (or confirm existing tap)
-  - [ ] Copy formula to tap and test: `brew tap Startr/tools && brew install yt-analyst`
-  - [ ] Verify `yt-analyst --help` works post-install
 
 ## Backlog
 
@@ -59,6 +50,16 @@
 - [ ] **Analysis v2 — named entities**: Person names and org names via regex heuristics
 - [ ] **Profile diff**: Compare two `profile.md` files to show voice evolution over time
 - [ ] **`KANBAN.canvas` setup**: Run TodoScope against this repo and verify board layout
+
+### Homebrew Release #deployment
+
+- [ ] **Publish v0.1.0**: Tag release, fill SHA256, create tap repo
+  - [ ] `make release VERSION=0.1.0` → bump `__version__`, commit, tag
+  - [ ] Generate tarball SHA256 from tagged release
+  - [ ] Run `brew update-python-resources Formula/yt-analyst.rb` to fill resource hashes
+  - [ ] Confirm `Startr/homebrew-tools` tap repo or similar 
+  - [ ] Copy formula to tap and test: `brew tap Startr/tools && brew install yt-analyst` or similar
+  - [ ] Verify `yt-analyst --help` works post-install
 
 ## Bugs
 
