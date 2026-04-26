@@ -195,12 +195,37 @@ def transcript_path(slug: str, video_id: str, cache_root: pathlib.Path) -> pathl
     return t / f"{video_id}.md"
 
 
-def analysis_path(slug: str, cache_root: pathlib.Path) -> pathlib.Path:
-    return channel_cache_dir(slug, cache_root) / "analysis.md"
+# Duration buckets (seconds) — used by cmd_analyze/cmd_profile to split a channel
+# into shorts/mid/long-form report sets so each tier can be evaluated separately.
+# Bounds are [lo, hi); "all" is implicit (every transcript regardless of length).
+BUCKET_THRESHOLDS = {
+    "shorts": (0, 300),                 # < 5 min  — clips, teasers, micro-content
+    "mid":    (300, 2160),              # 5–36 min — typical YouTube essay/vlog
+    "long":   (2160, float("inf")),     # ≥ 36 min — long-form documentary/lecture
+}
 
 
-def profile_path(slug: str, cache_root: pathlib.Path) -> pathlib.Path:
-    return channel_cache_dir(slug, cache_root) / "profile.md"
+def _bucket_for(duration: float, word_count: int = 0) -> str:
+    """Return the bucket name for a video. Falls back to ~150 wpm estimate when duration is missing."""
+    if duration <= 0 and word_count > 0:
+        duration = (word_count / 150) * 60  # ~150 wpm typical spoken pace
+    for name, (lo, hi) in BUCKET_THRESHOLDS.items():
+        if lo <= duration < hi:
+            return name
+    return "long"
+
+
+def _bucket_suffix(bucket: str) -> str:
+    """'all' → '' (canonical filename), other buckets → '-{bucket}'."""
+    return "" if bucket == "all" else f"-{bucket}"
+
+
+def analysis_path(slug: str, cache_root: pathlib.Path, bucket: str = "all") -> pathlib.Path:
+    return channel_cache_dir(slug, cache_root) / f"analysis{_bucket_suffix(bucket)}.md"
+
+
+def profile_path(slug: str, cache_root: pathlib.Path, bucket: str = "all") -> pathlib.Path:
+    return channel_cache_dir(slug, cache_root) / f"profile{_bucket_suffix(bucket)}.md"
 
 
 # ─── Text & Slug Utilities ────────────────────────────────────────────────────
@@ -737,17 +762,38 @@ def cmd_analyze(args) -> None:
         print(f"No transcript files in {tx_dir}.", file=sys.stderr)
         sys.exit(1)
 
-    transcripts = []
+    all_transcripts = []
     for tx_file in tx_files:
         meta, body = parse_frontmatter(tx_file.read_text(encoding="utf-8"))
         if body.strip():
-            transcripts.append({"meta": meta, "body": body})
+            all_transcripts.append({"meta": meta, "body": body})
 
-    if not transcripts:
+    if not all_transcripts:
         print("No transcript content found (all files empty?).", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Analyzing {len(transcripts)} transcript(s)...")
+    # Run analysis once per bucket so each report tier (all/shorts/mid/long) gets its own
+    # analysis-{bucket}.md. Empty buckets are skipped silently — no orphan files (poka-yoke).
+    for bucket in ("all", *BUCKET_THRESHOLDS.keys()):
+        if bucket == "all":
+            transcripts = all_transcripts
+        else:
+            transcripts = [
+                t for t in all_transcripts
+                if _bucket_for(
+                    t["meta"].get("duration_seconds", 0),
+                    t["meta"].get("word_count", 0),
+                ) == bucket
+            ]
+        if not transcripts:
+            continue
+        _analyze_bucket(slug, cache_root, transcripts, bucket)
+
+
+def _analyze_bucket(slug: str, cache_root: pathlib.Path, transcripts: list[dict], bucket: str) -> None:
+    """Run the full analysis pass on a transcript subset and write analysis-{bucket}.md."""
+    label = "all" if bucket == "all" else bucket
+    print(f"Analyzing {len(transcripts)} transcript(s) [{label}]...")
 
     # ── 4a: Vocabulary Fingerprint ──
     all_tokens: list[str] = []
@@ -897,14 +943,15 @@ Analyzed {len(transcripts)} transcript(s) totalling {total_words:,} words across
     an_meta = {
         "subject": channel,
         "channel": channel,
+        "bucket": bucket,
         "generated": datetime.date.today().isoformat(),
         "transcripts_analyzed": len(transcripts),
         "date_range": date_range,
         "total_words_analyzed": total_words,
     }
-    out = analysis_path(slug, cache_root)
+    out = analysis_path(slug, cache_root, bucket)
     out.write_text(render_frontmatter(an_meta, body), encoding="utf-8")
-    print(f"Analysis written: {out}")
+    print(f"  Written: {out.name}")
 
 
 def _fk_label(grade: float) -> str:
@@ -945,10 +992,9 @@ def _compute_date_range(transcripts: list[dict]) -> str:
 def cmd_profile(args) -> None:
     cache_root = get_cache_root(args.cache_dir)
     slug = args.slug
-    an_path = analysis_path(slug, cache_root)
 
-    # Fail fast with a clear message
-    if not an_path.exists():
+    # Fail fast if no canonical analysis exists yet (the "all" bucket is required)
+    if not analysis_path(slug, cache_root, "all").exists():
         print(
             f"Error: analysis.md not found for '{slug}'.\n"
             f"Run: yt-analyst analyze {slug}",
@@ -956,17 +1002,33 @@ def cmd_profile(args) -> None:
         )
         sys.exit(1)
 
+    # Generate one profile per bucket where the analysis file exists.
+    # Confidence scores are computed on the transcripts that actually fed each bucket.
+    for bucket in ("all", *BUCKET_THRESHOLDS.keys()):
+        if not analysis_path(slug, cache_root, bucket).exists():
+            continue
+        _profile_bucket(slug, cache_root, bucket)
+
+
+def _profile_bucket(slug: str, cache_root: pathlib.Path, bucket: str) -> None:
+    """Generate profile-{bucket}.md from the matching analysis-{bucket}.md."""
+    an_path = analysis_path(slug, cache_root, bucket)
     an_meta, an_body = parse_frontmatter(an_path.read_text(encoding="utf-8"))
 
-    # Load transcript metadata for confidence scoring
+    # Load transcript metadata for confidence scoring — filtered to this bucket
     tx_dir = channel_cache_dir(slug, cache_root) / "transcripts"
     tx_files = sorted(tx_dir.glob("*.md")) if tx_dir.exists() else []
     tx_metas = []
     tx_top_word_sets = []
     for f in tx_files:
         m, body = parse_frontmatter(f.read_text(encoding="utf-8"))
-        if m:
-            tx_metas.append(m)
+        if not m:
+            continue
+        # Skip transcripts not in this bucket (except for 'all' which keeps everything)
+        if bucket != "all":
+            if _bucket_for(m.get("duration_seconds", 0), m.get("word_count", 0)) != bucket:
+                continue
+        tx_metas.append(m)
         if body.strip():
             tokens = tokenize(body)
             freq = collections.Counter(tokens)
@@ -1106,6 +1168,7 @@ Maintain this voice consistently. When uncertain about how {subject} would phras
     pro_meta = {
         "subject": subject,
         "channel": channel,
+        "bucket": bucket,
         "generated": today.isoformat(),
         "transcripts_used": n,
         "transcripts_available": n,
@@ -1116,10 +1179,9 @@ Maintain this voice consistently. When uncertain about how {subject} would phras
         "confidence_notes": notes,
     }
 
-    out = profile_path(slug, cache_root)
+    out = profile_path(slug, cache_root, bucket)
     out.write_text(render_frontmatter(pro_meta, body), encoding="utf-8")
-    print(f"Profile written: {out}")
-    print(f"Confidence  relevance={relevance:.2f}  accuracy={accuracy:.2f}")
+    print(f"  Written: {out.name}  relevance={relevance:.2f}  accuracy={accuracy:.2f}")
 
 
 def _build_confidence_notes(n: int, median_age_months, formats_found: set, avg_quality: float) -> str:
