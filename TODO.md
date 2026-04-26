@@ -51,6 +51,13 @@
 
 - [ ] **WireGuard inside MCP Docker container**: macOS VPN clients (NordVPN) break cloudflared's WebSocket via kernel-level traffic intercept. Run WireGuard client inside container so cloudflared exits from a clean server IP, avoiding the local VPN conflict. Document as alternative to native MCP server.
 
+- [ ] **Transcript punctuation cleanup**: Auto-captions sometimes arrive with broken/missing punctuation (e.g., `i.t`, `we.ll`, no sentence breaks) which destroys Flesch-Kincaid scoring (Van Neistat read as Grade 39.7 → fixed to 4.7 after manual cleanup)
+  - [ ] Detect "low-punctuation" transcripts (e.g., < 1 period per 50 words) during `analyze`
+  - [ ] Add `--clean` flag to `analyze` that runs detected transcripts through cleanup
+  - [ ] Cleanup tier 1: heuristic (deepmultilingualpunctuation or rpunct library — pure-Python, no API)
+  - [ ] Cleanup tier 2: optional LLM API (Claude/OpenAI) for harder cases — opt-in via `--clean-llm`
+  - [ ] Cache cleaned version alongside raw (`{video_id}.cleaned.md`) so original is preserved
+
 - [ ] **Whisper fallback for caption-less channels**: When MCP returns `unavailable`, optionally download audio and transcribe locally via `whisper` CLI — enables channels like @casey that have captions disabled
   - [ ] Add `--whisper` flag to `fetch` to opt in
   - [ ] `yt-dlp --extract-audio` → temp file → `whisper` → parse output → store as transcript
