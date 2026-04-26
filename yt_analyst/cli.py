@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import copy
 import datetime
 import json
 import math
@@ -306,10 +307,32 @@ def _index_body(meta: dict) -> str:
     selected = sum(1 for v in videos if v["status"] == "selected")
     total = meta.get("total_videos", len(videos))
     name = meta.get("channel_name", "Channel")
-    return (
-        f"# {name} — Channel Index\n\n"
-        f"Discovered {total} videos. {fetched} fetched, {selected} selected.\n"
-    )
+
+    status_order = {"fetched": 0, "selected": 1, "pending": 2, "skipped": 3, "failed": 4}
+    sorted_videos = sorted(videos, key=lambda v: status_order.get(v["status"], 9))
+
+    lines = [
+        f"# {name} — Channel Index",
+        "",
+        f"Discovered {total} videos. {fetched} fetched, {selected} selected.",
+        "",
+        "| Title | Status | Views | Words |",
+        "|-------|--------|-------|-------|",
+    ]
+    for v in sorted_videos:
+        title = v.get("title") or v["id"]
+        display = (title[:60] + "…") if len(title) > 60 else title
+        status = v["status"]
+        views = f"{v['view_count']:,}" if v.get("view_count") else "—"
+        words = f"{v['word_count']:,}" if v.get("word_count") else "—"
+        if status == "fetched":
+            safe = display.replace("|", "\\|")
+            title_cell = f"[[transcripts/{v['id']}\\|{safe}]]"
+        else:
+            title_cell = display
+        lines.append(f"| {title_cell} | {status} | {views} | {words} |")
+
+    return "\n".join(lines) + "\n"
 
 
 # ─── Commands ─────────────────────────────────────────────────────────────────
@@ -391,50 +414,95 @@ def cmd_discover(args) -> None:
 def cmd_sample(args) -> None:
     cache_root = get_cache_root(args.cache_dir)
     slug = args.slug
-    meta, _ = read_index(slug, cache_root)
+    strategy = getattr(args, "strategy", "blend")
+    target_slug = f"{slug}-{strategy}" if strategy != "blend" else slug
+
+    # Fork parent index into strategy-specific dir on first run
+    if strategy != "blend" and not index_path(target_slug, cache_root).exists():
+        parent_meta, _ = read_index(slug, cache_root)
+        if not parent_meta:
+            print(f"No index found for '{slug}'. Run discover first.", file=sys.stderr)
+            sys.exit(1)
+        fork_meta = copy.deepcopy(parent_meta)
+        for v in fork_meta.get("videos", []):
+            if v["status"] != "fetched":
+                v["status"] = "pending"
+        write_index(target_slug, fork_meta, _index_body(fork_meta), cache_root)
+        print(f"  Forked '{slug}' → '{target_slug}'")
+
+    meta, _ = read_index(target_slug, cache_root)
     if not meta:
-        print(f"No index found for '{slug}'. Run discover first.", file=sys.stderr)
+        print(f"No index found for '{target_slug}'. Run discover first.", file=sys.stderr)
         sys.exit(1)
 
     videos = meta.get("videos", [])
     max_videos = args.max
     eligible = [v for v in videos if v["status"] in ("pending", "failed")]
+    selected_ids: set[str] = set()
 
-    if len(videos) <= 50:
-        for v in eligible:
-            v["status"] = "selected"
-        selected_count = len(eligible)
-    else:
-        selected_ids: set[str] = set()
-
-        for v in sorted(eligible, key=lambda v: v.get("date") or "", reverse=True)[:15]:
+    if strategy == "latest":
+        for v in sorted(eligible, key=lambda v: v.get("date") or "", reverse=True)[:max_videos]:
             v["status"] = "selected"
             selected_ids.add(v["id"])
-
-        for v in sorted(eligible, key=lambda v: v.get("view_count") or 0, reverse=True):
-            if len(selected_ids) >= 30:
-                break
-            if v["id"] not in selected_ids:
-                v["status"] = "selected"
-                selected_ids.add(v["id"])
-
-        remaining = [v for v in eligible if v["id"] not in selected_ids]
-        random.shuffle(remaining)
-        for v in remaining:
-            if len(selected_ids) >= max_videos:
-                break
-            v["status"] = "selected"
-            selected_ids.add(v["id"])
-
         for v in eligible:
             if v["id"] not in selected_ids:
                 v["status"] = "skipped"
-
         selected_count = len(selected_ids)
 
+    elif strategy == "top":
+        for v in sorted(eligible, key=lambda v: v.get("view_count") or 0, reverse=True)[:max_videos]:
+            v["status"] = "selected"
+            selected_ids.add(v["id"])
+        for v in eligible:
+            if v["id"] not in selected_ids:
+                v["status"] = "skipped"
+        selected_count = len(selected_ids)
+
+    elif strategy == "random":
+        shuffled = eligible[:]
+        random.shuffle(shuffled)
+        for v in shuffled[:max_videos]:
+            v["status"] = "selected"
+            selected_ids.add(v["id"])
+        for v in eligible:
+            if v["id"] not in selected_ids:
+                v["status"] = "skipped"
+        selected_count = len(selected_ids)
+
+    else:  # blend — original behavior
+        if len(videos) <= 50:
+            for v in eligible:
+                v["status"] = "selected"
+            selected_count = len(eligible)
+        else:
+            for v in sorted(eligible, key=lambda v: v.get("date") or "", reverse=True)[:15]:
+                v["status"] = "selected"
+                selected_ids.add(v["id"])
+
+            for v in sorted(eligible, key=lambda v: v.get("view_count") or 0, reverse=True):
+                if len(selected_ids) >= 30:
+                    break
+                if v["id"] not in selected_ids:
+                    v["status"] = "selected"
+                    selected_ids.add(v["id"])
+
+            remaining = [v for v in eligible if v["id"] not in selected_ids]
+            random.shuffle(remaining)
+            for v in remaining:
+                if len(selected_ids) >= max_videos:
+                    break
+                v["status"] = "selected"
+                selected_ids.add(v["id"])
+
+            for v in eligible:
+                if v["id"] not in selected_ids:
+                    v["status"] = "skipped"
+
+            selected_count = len(selected_ids)
+
     meta["videos"] = videos
-    write_index(slug, meta, _index_body(meta), cache_root)
-    print(f"Selected {selected_count} videos for fetching.")
+    write_index(target_slug, meta, _index_body(meta), cache_root)
+    print(f"Selected {selected_count} videos for '{target_slug}'.")
 
 
 def _post_transcript(url: str, token: str, video_id: str) -> tuple[int, str]:
@@ -1148,6 +1216,12 @@ def main() -> None:
     p = sub.add_parser("sample", parents=[shared], help="Select videos for fetching")
     p.add_argument("slug", help="Channel slug")
     p.add_argument("--max", type=int, default=50, metavar="N", help="Max videos to select (default: 50)")
+    p.add_argument(
+        "--strategy",
+        choices=["blend", "latest", "top", "random"],
+        default="blend",
+        help="Selection strategy: blend (default=15 latest+top fill+random), latest, top, random",
+    )
 
     p = sub.add_parser("fetch", parents=[shared], help="Fetch transcripts (humanized rate limiting)")
     p.add_argument("slug", help="Channel slug")

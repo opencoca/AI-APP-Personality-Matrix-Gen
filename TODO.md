@@ -2,7 +2,8 @@
 
 > **Convention** — Sections below map to kanban columns. Inline source-code
 > tags use the same vocabulary so items stay cross-referenced between this
-> file and the codebase.
+> file and the codebase. `KANBAN.canvas` is generated locally by TodoScope
+> and is gitignored — do not commit it.
 >
 > | Column      | Markdown section             | Inline tag  |
 > |-------------|------------------------------|-------------|
@@ -47,7 +48,7 @@
 - [ ] **`status --all`**: List all cached channel slugs, not just one
 - [ ] **Analysis v2 — named entities**: Person names and org names via regex heuristics
 - [ ] **Profile diff**: Compare two `profile.md` files to show voice evolution over time
-- [ ] **`KANBAN.canvas` setup**: Run TodoScope against this repo and verify board layout
+- [ ] **TodoScope board verify**: Run TodoScope locally against this repo and confirm the board layout matches expectations (`KANBAN.canvas` is gitignored — local only)
 
 ### Homebrew Release #deployment
 

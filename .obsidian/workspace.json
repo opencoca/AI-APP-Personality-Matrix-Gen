@@ -1,0 +1,230 @@
+{
+  "main": {
+    "id": "cd3cfa4eaef9bcfa",
+    "type": "split",
+    "children": [
+      {
+        "id": "ba709d784543ecde",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "635fbf532433b219",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "scripts/yt-cache/natebjones/analysis.md",
+                "mode": "preview",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "analysis"
+            }
+          }
+        ]
+      },
+      {
+        "id": "5374fed1ab4499f1",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "7bb212a65cdb68c2",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "scripts/yt-cache/atmoio/analysis.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "analysis"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "951ffbf9b5b787cf",
+    "type": "split",
+    "children": [
+      {
+        "id": "eea55e258a5b36cb",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "8a70f1d50d61f539",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "a11d38ff0646d069",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "302785f9c04fbd50",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "right": {
+    "id": "7b061d987ff10f95",
+    "type": "split",
+    "children": [
+      {
+        "id": "1f4277dacfdb3541",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "3bfc02e719b775fe",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "scripts/yt-cache/atmoio/analysis.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for analysis"
+            }
+          },
+          {
+            "id": "95ed26e29f64ce73",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "scripts/yt-cache/atmoio/analysis.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from analysis"
+            }
+          },
+          {
+            "id": "746b6b820ae4034b",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "4b43ea536ea76feb",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "e3a1594170e0ae88",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "scripts/yt-cache/atmoio/analysis.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of analysis"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "7bb212a65cdb68c2",
+  "lastOpenFiles": [
+    "yt_analyst/__pycache__/cli.cpython-312.pyc",
+    "scripts/yt-cache/casey-random/index.md",
+    "scripts/yt-cache/casey-random",
+    "scripts/yt-cache/casey-latest/index.md",
+    "scripts/yt-cache/casey-latest",
+    "scripts/yt-cache/casey-top/index.md",
+    "scripts/yt-cache/casey-top",
+    "scripts/yt-cache/casey/index.md",
+    "scripts/yt-cache/casey",
+    "scripts/yt-cache/natebjones-random/index.md",
+    "scripts/yt-cache/natebjones-random",
+    "scripts/yt-cache/natebjones-latest/index.md",
+    "scripts/yt-cache/natebjones-latest",
+    "scripts/yt-cache/natebjones-top/index.md",
+    "scripts/yt-cache/natebjones-top",
+    "scripts/yt-cache/natebjones/analysis.md",
+    "scripts/yt-cache/natebjones/transcripts/tJB_8mfRgCo.md",
+    "scripts/yt-cache/natebjones/transcripts/dxq7WtWxi44.md",
+    "scripts/yt-cache/natebjones/transcripts/brBPsPPyuQM.md",
+    "scripts/yt-cache/natebjones/index.md"
+  ]
+}
