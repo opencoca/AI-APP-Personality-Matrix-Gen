@@ -12,7 +12,8 @@
       "Bash(grep -E \"^[0-9]+$\")",
       "Bash(xargs -I{} sh -c 'docker exec youtube-transcribe-server-mcpo cat /proc/{}/cmdline 2>/dev/null | tr \"\\\\0\" \" \" | grep -i cloud')",
       "Bash(python scripts/refresh-yt-cookies.py)",
-      "Bash(curl -s http://localhost:8000/)"
+      "Bash(curl -s http://localhost:8000/)",
+      "WebSearch"
     ]
   }
 }

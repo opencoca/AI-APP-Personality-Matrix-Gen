@@ -18,6 +18,11 @@
 
 ## In Progress
 
+- [ ] **Conservative fetch defaults** — current defaults (3-8s delay, 25/session) are too aggressive and trigger IP-level YouTube bans that block browser access too #critical
+  - [ ] New defaults: 15-45s delay, max 10/session, 3-5 min burst pause
+  - [ ] Current aggressive values become `--fast` flag (opt-in, clearly documented as ban-risk)
+  - [ ] Update `--help` text to warn about IP bans
+
 - [ ] **MCP cookie updater — hot-swap without restart** #critical
   - [ ] Add `/cookies/reload` endpoint or file-watch on `/app/cookies.txt` to MCP server so cookies can be updated without restarting the container (avoids URL churn)
   - [ ] Update `scripts/refresh-yt-cookies.py` to `docker cp` a Netscape `cookies.txt` and call reload endpoint instead of restarting
@@ -43,6 +48,13 @@
 
 
 ## Backlog
+
+- [ ] **WireGuard inside MCP Docker container**: macOS VPN clients (NordVPN) break cloudflared's WebSocket via kernel-level traffic intercept. Run WireGuard client inside container so cloudflared exits from a clean server IP, avoiding the local VPN conflict. Document as alternative to native MCP server.
+
+- [ ] **Whisper fallback for caption-less channels**: When MCP returns `unavailable`, optionally download audio and transcribe locally via `whisper` CLI — enables channels like @casey that have captions disabled
+  - [ ] Add `--whisper` flag to `fetch` to opt in
+  - [ ] `yt-dlp --extract-audio` → temp file → `whisper` → parse output → store as transcript
+  - [ ] Document as optional dep (not required for normal use)
 
 - [ ] **`--output-dir` flag**: Alias for `--cache-dir`, more intuitive for installed users
 - [ ] **`status --all`**: List all cached channel slugs, not just one

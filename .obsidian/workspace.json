@@ -4,41 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "ba709d784543ecde",
+        "id": "3f17c99904e9372c",
         "type": "tabs",
         "children": [
           {
-            "id": "635fbf532433b219",
+            "id": "fa3db50e55bd4d20",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "scripts/yt-cache/natebjones/analysis.md",
-                "mode": "preview",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "analysis"
-            }
-          }
-        ]
-      },
-      {
-        "id": "5374fed1ab4499f1",
-        "type": "tabs",
-        "children": [
-          {
-            "id": "7bb212a65cdb68c2",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "scripts/yt-cache/atmoio/analysis.md",
+                "file": "scripts/yt-cache/vanneistat-top/transcripts/-4zC8phWZ30.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "analysis"
+              "title": "-4zC8phWZ30"
             }
           }
         ]
@@ -98,8 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 300
   },
   "right": {
     "id": "7b061d987ff10f95",
@@ -115,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "scripts/yt-cache/atmoio/analysis.md",
+                "file": "scripts/yt-cache/vanneistat-top/transcripts/-4zC8phWZ30.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -125,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for analysis"
+              "title": "Backlinks for -4zC8phWZ30"
             }
           },
           {
@@ -134,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "scripts/yt-cache/atmoio/analysis.md",
+                "file": "scripts/yt-cache/vanneistat-top/transcripts/-4zC8phWZ30.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from analysis"
+              "title": "Outgoing links from -4zC8phWZ30"
             }
           },
           {
@@ -177,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "scripts/yt-cache/atmoio/analysis.md",
+                "file": "scripts/yt-cache/vanneistat-top/transcripts/-4zC8phWZ30.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of analysis"
+              "title": "Outline of -4zC8phWZ30"
             }
           }
         ]
@@ -204,27 +183,43 @@
       "bases:Create new base": false
     }
   },
-  "active": "7bb212a65cdb68c2",
+  "active": "fa3db50e55bd4d20",
   "lastOpenFiles": [
-    "yt_analyst/__pycache__/cli.cpython-312.pyc",
-    "scripts/yt-cache/casey-random/index.md",
-    "scripts/yt-cache/casey-random",
-    "scripts/yt-cache/casey-latest/index.md",
-    "scripts/yt-cache/casey-latest",
-    "scripts/yt-cache/casey-top/index.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/5oTDsss4lpQ.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/cCyuVoTt_mg.md",
+    "scripts/yt-cache/vanneistat-top/analysis.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/htekjgk8OBA.md",
+    "scripts/yt-cache/vanneistat-top/profile.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/7UTYeebC-Sg.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/IqpOMOnCB2A.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/VbtR2_ZrifM.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/D5cqSHeBUGo.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/K96S2qroRN4.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/eT6wYbaRrlQ.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/K65UQy6t6KQ.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/rTYH943jiEo.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/xeVyfiP0cLk.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/ooTN3dkYXQM.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/DloMkje1JFY.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/-4zC8phWZ30.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/WqYIkm66RSI.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/xI3mB0x24x0.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/MhN4aToRGUc.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/JgKIUvM0Uzc.md",
+    "scripts/yt-cache/vanneistat-top/transcripts/ncZ1mO8mA44.md",
+    "scripts/yt-cache/casey-top/analysis.md",
+    "scripts/yt-cache/vanneistat-top/transcripts",
+    "scripts/yt-cache/vanneistat-top/index.md",
+    "scripts/yt-cache/vanneistat-top",
+    "scripts/yt-cache/vanneistat/index.md",
+    "scripts/yt-cache/vanneistat",
+    "scripts/yt-cache/casey-latest/analysis.md",
+    "scripts/yt-cache/casey-top/transcripts",
     "scripts/yt-cache/casey-top",
-    "scripts/yt-cache/casey/index.md",
+    "scripts/yt-cache/casey-latest/transcripts",
     "scripts/yt-cache/casey",
-    "scripts/yt-cache/natebjones-random/index.md",
-    "scripts/yt-cache/natebjones-random",
-    "scripts/yt-cache/natebjones-latest/index.md",
-    "scripts/yt-cache/natebjones-latest",
-    "scripts/yt-cache/natebjones-top/index.md",
-    "scripts/yt-cache/natebjones-top",
-    "scripts/yt-cache/natebjones/analysis.md",
-    "scripts/yt-cache/natebjones/transcripts/tJB_8mfRgCo.md",
-    "scripts/yt-cache/natebjones/transcripts/dxq7WtWxi44.md",
-    "scripts/yt-cache/natebjones/transcripts/brBPsPPyuQM.md",
-    "scripts/yt-cache/natebjones/index.md"
+    "scripts/yt-cache/casey-latest",
+    "yt_analyst/__pycache__/cli.cpython-312.pyc",
+    "scripts/yt-cache/casey-random"
   ]
 }
