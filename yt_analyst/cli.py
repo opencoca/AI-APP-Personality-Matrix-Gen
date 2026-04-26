@@ -341,11 +341,11 @@ def cmd_discover(args) -> None:
         print("No videos found.", file=sys.stderr)
         sys.exit(1)
 
-    channel_name = (
-        raw_entries[0].get("channel")
-        or raw_entries[0].get("uploader")
-        or "unknown-channel"
-    )
+    channel_name = raw_entries[0].get("channel") or raw_entries[0].get("uploader")
+    if not channel_name:
+        # yt-dlp flat-playlist entries omit channel on @handle URLs — extract from URL
+        m = re.search(r"/@([^/?#]+)", url) or re.search(r"/channel/([^/?#]+)", url)
+        channel_name = m.group(1) if m else "unknown-channel"
     channel_id = raw_entries[0].get("channel_id") or ""
     slug = slugify(channel_name)
 
@@ -451,12 +451,15 @@ def _post_transcript(url: str, token: str, video_id: str) -> tuple[int, str]:
         )
         if resp.status_code == 200:
             data = resp.json()
-            content = (
-                data.get("transcript")
-                or data.get("text")
-                or data.get("content")
-                or str(data)
-            )
+            if isinstance(data, str):
+                content = data
+            else:
+                content = (
+                    data.get("transcript")
+                    or data.get("text")
+                    or data.get("content")
+                    or str(data)
+                )
             return 200, content
         return resp.status_code, resp.text
     except requests.exceptions.ConnectionError as e:
@@ -572,6 +575,15 @@ def cmd_fetch(args) -> None:
                 continue
 
         if status == 200:
+            # MCP returns 200 + error string for gated/unavailable videos
+            if content.lstrip().startswith("Error:") or "Could not retrieve a transcript" in content:
+                print(f"           ✗ unavailable (members-only or no captions)")
+                video["status"] = "failed"
+                video["error"] = "unavailable"
+                video["failed_date"] = now_iso()
+                write_index(slug, meta, _index_body(meta), cache_root)
+                continue
+
             word_ct = count_words(content)
             tx_meta = {
                 "video_id": video_id,

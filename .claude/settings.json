@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(uv run *)"
+      "Bash(uv run *)",
+      "Bash(.venv/bin/yt-analyst sample *)",
+      "Bash(.venv/bin/yt-analyst fetch *)",
+      "Bash(.venv/bin/yt-analyst status *)",
+      "Bash(.venv/bin/yt-analyst discover *)",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c ' *)",
+      "Bash(docker exec *)",
+      "Bash(grep -E \"^[0-9]+$\")",
+      "Bash(xargs -I{} sh -c 'docker exec youtube-transcribe-server-mcpo cat /proc/{}/cmdline 2>/dev/null | tr \"\\\\0\" \" \" | grep -i cloud')",
+      "Bash(python scripts/refresh-yt-cookies.py)",
+      "Bash(curl -s http://localhost:8000/)"
     ]
   }
 }

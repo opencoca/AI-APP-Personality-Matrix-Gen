@@ -17,13 +17,11 @@
 
 ## In Progress
 
-- [ ] **End-to-end validation**: Run full pipeline against Sage AI Labs channel (4 videos, known corpus) #testing #critical
-  - [ ] `discover` → 4 videos in index.md
-  - [ ] `sample` → all 4 marked `selected`
-  - [ ] `fetch` → 4 transcripts fetched with live MCP
-  - [ ] `analyze` → analysis.md with all 4 sections populated
-  - [ ] `profile` → profile.md with confidence scores + draft system prompt
-  - [ ] `status` → shows 4 fetched, 0 pending
+- [ ] **MCP cookie updater — hot-swap without restart** #critical
+  - [ ] Add `/cookies/reload` endpoint or file-watch on `/app/cookies.txt` to MCP server so cookies can be updated without restarting the container (avoids URL churn)
+  - [ ] Update `scripts/refresh-yt-cookies.py` to `docker cp` a Netscape `cookies.txt` and call reload endpoint instead of restarting
+  - [ ] Document the new flow in `docs/mcp-cookie-refresh.md`
+  - [ ] Coordinate with MCP server repo (or merge since project is ours)
 
 ## TODO
 
@@ -60,12 +58,32 @@
   - [ ] Confirm `Startr/homebrew-tools` tap repo or similar 
   - [ ] Copy formula to tap and test: `brew tap Startr/tools && brew install yt-analyst` or similar
   - [ ] Verify `yt-analyst --help` works post-install
+  - [ ] Add Homebrew install section back to `README.md` as recommended path
 
 ## Bugs
 
 _No known bugs. Use `# BUG:` inline tags in source to flag defects._
 
 ## Completed
+
+### 2026-04-26 — Live pipeline validation and MCP tooling
+
+- [x] **End-to-end validation**: Full pipeline validated against @atmoio channel (5 transcripts)
+  - [x] `discover` → 49 videos, slug correctly derived from `@handle` URL
+  - [x] `sample` → all 49 marked `selected` (≤50 cap confirmed)
+  - [x] `fetch` → 5 real transcripts fetched, 6 members-only correctly flagged `failed`
+  - [x] `analyze` → `analysis.md` populated from 5 transcripts
+  - [x] `profile` → `profile.md` with confidence scores + draft system prompt
+  - [x] `status` → correct counts reported
+
+- [x] **Bug fix — `cmd_discover` slug**: `@handle` URLs returned `unknown-channel` because yt-dlp flat-playlist entries don't carry channel metadata; fixed with URL regex fallback
+
+- [x] **Bug fix — MCP error masking**: Server returns `200` + error string for gated/unavailable videos; added content guard (`"Error:"` / `"Could not retrieve"`) to mark as `failed` instead of storing junk transcript
+
+- [x] **MCP cookie refresh tooling**: `scripts/refresh-yt-cookies.py` + `docs/mcp-cookie-refresh.md`
+  - [x] Reads fresh YouTube cookies from Zen browser profile (sqlite)
+  - [x] Recreates Docker container with fresh cookies + correct `--public-mcpo` CMD
+  - [x] Waits for new Cloudflare tunnel URL and patches `.env` automatically
 
 ### 2026-04-26 — Initial scaffolding and full 5-phase implementation
 
