@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yt-analyst"
+version = "0.1.0"
+description = "YouTube channel transcript archiver and voice/personality profiler for Sage.is agent personas"
+readme = "README.md"
+license = {text = "AGPL-3.0-or-later"}
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+    "yt-dlp>=2024.1",
+    "pyyaml>=6.0",
+    "feedparser>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4.0",
+]
+
+[project.scripts]
+yt-analyst = "yt_analyst.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Startr/AI-APP-Personality-Matrix-Gen"
+Repository = "https://github.com/Startr/AI-APP-Personality-Matrix-Gen"
+
+[tool.setuptools.packages.find]
+include = ["yt_analyst*"]
+
+[tool.ruff]
+line-length = 99
+target-version = "py310"

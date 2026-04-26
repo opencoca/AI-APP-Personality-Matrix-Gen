@@ -1,0 +1,10 @@
+path,reason
+.venv,Python virtual environment
+__pycache__,Python bytecode cache
+scripts/yt-cache,transcript cache — runtime data, not source
+build,build artifacts
+dist,distribution files
+.pytest_cache,pytest cache
+.ruff_cache,ruff linter cache
+yt_analyst.egg-info,package metadata
+Formula,Homebrew Ruby formula — no inline Python tags
