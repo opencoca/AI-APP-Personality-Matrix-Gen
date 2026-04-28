@@ -546,6 +546,7 @@ def cmd_discover(args) -> None:
     print(f"Channel slug: {slug}")
     print(f"Index written: {index_path(slug, cache_root)}")
     print(f"Total videos: {len(new_videos)}")
+    return slug
 
 
 def cmd_sample(args) -> None:
@@ -1690,6 +1691,11 @@ def cmd_profile(args) -> None:
             continue
         _profile_bucket(slug, cache_root, bucket)
 
+    # Refresh the cross-channel library now that profile.md exists. INDEX.md
+    # filters by `profile.md` presence, so a channel newly analyzed but not yet
+    # profiled would otherwise be missing from the library until next report run.
+    _write_global_report(cache_root)
+
 
 def _profile_bucket(slug: str, cache_root: pathlib.Path, bucket: str) -> None:
     """Generate profile-{bucket}.md from the matching analysis-{bucket}.md."""
@@ -2117,6 +2123,68 @@ def cmd_enrich(args) -> None:
     print(f"Themes written: {out}")
 
 
+def cmd_run(args) -> None:
+    """One-shot pipeline: discover → sample → fetch → (clean) → analyze → profile.
+
+    Detects whether `target` is a URL/handle (runs discover first) or an
+    existing slug (skips discover). Reuses the per-step cmd_* functions by
+    constructing minimal argparse Namespaces. Stops at the first failed step
+    via sys.exit propagating up — the user can resume from the failed step.
+    """
+    target = args.target
+    is_url = target.startswith(("http", "@")) or "youtube.com" in target
+
+    # Forward shared flags into per-step namespaces
+    shared = {
+        "cache_dir": args.cache_dir,
+        "mcp_url": args.mcp_url,
+        "mcp_token": args.mcp_token,
+    }
+
+    total_steps = 5 + (1 if is_url else 0) + (1 if args.clean else 0)
+    step = 0
+
+    if is_url:
+        step += 1
+        print(f"\n━━━ [{step}/{total_steps}] Discover ━━━")
+        slug = cmd_discover(argparse.Namespace(**shared, target=target))
+    else:
+        slug = target
+        print(f"Skipping discover (target '{slug}' looks like an existing slug)")
+
+    step += 1
+    print(f"\n━━━ [{step}/{total_steps}] Sample ━━━")
+    cmd_sample(argparse.Namespace(**shared, slug=slug, max=args.max, strategy=args.strategy))
+    # sample auto-forks for non-blend strategies → track the active slug
+    active_slug = f"{slug}-{args.strategy}" if args.strategy != "blend" else slug
+
+    step += 1
+    print(f"\n━━━ [{step}/{total_steps}] Fetch ━━━")
+    cmd_fetch(argparse.Namespace(
+        **shared, slug=active_slug, max=args.max,
+        delay=args.delay, session_pause=args.session_pause,
+        business_hours=False, force_retry=False,
+    ))
+
+    if args.clean:
+        step += 1
+        print(f"\n━━━ [{step}/{total_steps}] Clean (BERT) ━━━")
+        cmd_clean(argparse.Namespace(**shared, slug=active_slug, force=False))
+
+    step += 1
+    print(f"\n━━━ [{step}/{total_steps}] Analyze ━━━")
+    cmd_analyze(argparse.Namespace(**shared, slug=active_slug))
+
+    step += 1
+    print(f"\n━━━ [{step}/{total_steps}] Profile ━━━")
+    cmd_profile(argparse.Namespace(**shared, slug=active_slug))
+
+    cache_root = get_cache_root(args.cache_dir)
+    print(f"\n✓ Pipeline complete for '{active_slug}'")
+    print(f"  Profile: {profile_path(active_slug, cache_root)}")
+    print(f"  Library: {cache_root / 'INDEX.md'}")
+
+
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -2133,6 +2201,23 @@ def main() -> None:
     shared.add_argument("--mcp-token", metavar="TOKEN", help="MCP server auth token")
 
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser(
+        "run", parents=[shared],
+        help="One-shot full pipeline: discover → sample → fetch → (clean) → analyze → profile",
+    )
+    p.add_argument("target", help="Channel/playlist URL, @handle, or existing slug")
+    p.add_argument(
+        "--strategy", choices=["blend", "latest", "top", "random"], default="blend",
+        help="Sampling strategy (default: blend)",
+    )
+    p.add_argument("--max", type=int, default=20, metavar="N", help="Max videos to sample/fetch (default: 20)")
+    p.add_argument("--delay", default="15-45", metavar="MIN-MAX", help="Fetch jitter (default: 15-45)")
+    p.add_argument(
+        "--session-pause", default="3-5,120-180", metavar="N-M,S-T",
+        help="Pause every N-M requests for S-T seconds (default: 3-5,120-180)",
+    )
+    p.add_argument("--clean", action="store_true", help="Run BERT punctuation cleanup before analyze")
 
     p = sub.add_parser("discover", parents=[shared], help="Enumerate videos from a channel")
     p.add_argument("target", help="Channel URL, ID, or @handle")
@@ -2198,6 +2283,7 @@ def main() -> None:
 
     args = parser.parse_args()
     {
+        "run": cmd_run,
         "discover": cmd_discover,
         "sample": cmd_sample,
         "fetch": cmd_fetch,

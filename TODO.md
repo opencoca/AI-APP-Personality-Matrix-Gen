@@ -51,17 +51,14 @@
 
 - [ ] **WireGuard inside MCP Docker container**: macOS VPN clients (NordVPN) break cloudflared's WebSocket via kernel-level traffic intercept. Run WireGuard client inside container so cloudflared exits from a clean server IP, avoiding the local VPN conflict. Document as alternative to native MCP server.
 
-- [ ] **Transcript punctuation cleanup**: Auto-captions sometimes arrive with broken/missing punctuation (e.g., `i.t`, `we.ll`, no sentence breaks) which destroys Flesch-Kincaid scoring (Van Neistat read as Grade 39.7 → fixed to 4.7 after manual cleanup)
-  - [ ] Detect "low-punctuation" transcripts (e.g., < 1 period per 50 words) during `analyze`
-  - [ ] Add `--clean` flag to `analyze` that runs detected transcripts through cleanup
-  - [ ] Cleanup tier 1: heuristic (deepmultilingualpunctuation or rpunct library — pure-Python, no API)
-  - [ ] Cleanup tier 2: optional LLM API (Claude/OpenAI) for harder cases — opt-in via `--clean-llm`
-  - [ ] Cache cleaned version alongside raw (`{video_id}.cleaned.md`) so original is preserved
-
 - [ ] **Whisper fallback for caption-less channels**: When MCP returns `unavailable`, optionally download audio and transcribe locally via `whisper` CLI — enables channels like @casey that have captions disabled
   - [ ] Add `--whisper` flag to `fetch` to opt in
   - [ ] `yt-dlp --extract-audio` → temp file → `whisper` → parse output → store as transcript
   - [ ] Document as optional dep (not required for normal use)
+
+- [ ] **LLM-based punctuation tier 2**: For transcripts that BERT can't fully resolve (very low-density, long monologues), add an opt-in LLM cleanup path via the existing `enrich` infrastructure. Re-uses `YT_ANALYST_LLM_*` env vars.
+
+- [ ] **YouTube transcript-panel scraping**: Parse `ytInitialData` → `engagementPanels` → `transcriptSearchPanelRenderer` to grab transcripts that channels (e.g. @casey) have disabled at the caption track level but YouTube still indexes for search.
 
 - [ ] **`--output-dir` flag**: Alias for `--cache-dir`, more intuitive for installed users
 - [ ] **`status --all`**: List all cached channel slugs, not just one
@@ -86,7 +83,29 @@ _No known bugs. Use `# BUG:` inline tags in source to flag defects._
 
 ## Completed
 
-### 2026-04-26 — Live pipeline validation and MCP tooling
+### 2026-04-28 — LLM enrichment, BERT cleanup, library index
+
+- [x] **Cross-channel `INDEX.md`**: `report` command (auto-runs at end of `analyze`) builds a sortable library index with Channels table, Variation Index ranked by Top-100 coverage, Quick Profile cards, and a markdown footnote glossary explaining every column term
+- [x] **Obsidian/SilverBullet wiki link interlinking**: every report has a top-of-file nav breadcrumb (`[[INDEX|← Channel Library]] · [[slug/profile|...]] · ...`) that resolves cleanly in Obsidian and SilverBullet; `_nav_links()` helper auto-skips the current file and missing siblings
+- [x] **Vocabulary Distribution analysis** (Zipf shape): total unique vocab, hapax/dis/tris counts, top-N cumulative coverage (20/50/100/500), ASCII rank-frequency bar chart for top 20 words
+- [x] **Thematic concentration metric**: `recurring_themes_count` — words appearing in ≥50% of transcripts. Caught what vocab metrics missed (e.g. W3WFocus has moderate Top-100 coverage but 481 recurring themes — political vocabulary saturating every video)
+- [x] **Three-dimensional Variation Index** in INDEX.md: lexical (Top-100), long-tail (Hapax %), thematic (Themes count) with auto-interpretation labels per channel
+- [x] **Markdown footnote glossary** in INDEX.md: every column header (Tx, Words, Unique, Grade, TTR, Top-100, Hapax, Themes, Confidence, Buckets) has a `[^id]` footnote with caveats and interpretation guidance
+- [x] **Playlist URL discover**: `discover` auto-detects URLs with `list=` parameter, uses playlist title for slug, stores `playlist_id` and `source_url` in frontmatter
+- [x] **`clean` command — BERT punctuation restoration**: optional `[punct]` extra installs `deepmultilingualpunctuation`; restores sentence boundaries on low-density auto-captions; writes `{video_id}.cleaned.md` siblings (originals untouched); `analyze`/`profile`/`enrich` auto-prefer cleaned versions; idempotent
+- [x] **Pin transformers <5** in `[punct]` extra (deepmultilingualpunctuation uses legacy `grouped_entities` pipeline kwarg, removed in transformers 5.x)
+- [x] **End-to-end fix validation**: About That (CBC) Grade dropped from 17.1 → 7.6 after BERT cleanup, confirming the punctuation artifact theory
+
+### 2026-04-27 — Sampling strategies, buckets, thematic heuristics, LLM enrichment
+
+- [x] **`sample --strategy {blend|latest|top|random}`**: explicit strategy selection; non-blend strategies auto-fork into `<slug>-<strategy>/` cache directories so runs are isolated and comparable
+- [x] **Obsidian-friendly `index.md`**: body becomes a Markdown table of every video with status, views, words, and `[[transcripts/VIDEO_ID|Title]]` wiki links to fetched transcripts; sorted fetched → selected → pending → skipped → failed
+- [x] **Duration-bucketed analysis**: every `analyze` walks `("all", "shorts", "mid", "long")` (< 5 min / 5–36 min / ≥ 36 min) and writes `analysis-{bucket}.md` + `profile-{bucket}.md` per bucket with content; empty buckets skipped silently
+- [x] **Bucket fallback for missing duration**: `_bucket_for()` falls back to ~150 wpm word-count estimate when `duration_seconds` is absent
+- [x] **Thematic Signals analysis section**: 7 new heuristic dimensions with per-1k-word rates and three-tier intensity labels — Fear/threat, Urgency, Hype/superlatives, Promotional CTAs, Authority citations, Imperative directives, Comparative framing
+- [x] **Cross-bucket `compare.md`**: auto-runs at end of `analyze` (when ≥3 buckets exist); also `compare` standalone command; surfaces >2× divergences between buckets and a "funnel hypothesis" section flagging shorts-as-promotional-teaser patterns
+- [x] **`enrich` command — LLM-derived themes/intent/stance**: opt-in OpenAI-compatible chat completions via `requests`, no SDK; works with OpenAI, Anthropic, Ollama, LM Studio, Sage.is, Groq, etc.; cost-transparent (prints estimated tokens, prompts before calling); writes `themes{-bucket}.md` with Core Themes / Primary Intent / Narrative Arc / Stance / Audience / Cross-bucket Note sections; documented in `docs/llm-enrich.md` with provider examples
+- [x] **Live validation across 9 channels**: atmoio, NateBJones, Van Neistat (top 20), Casey Neistat (top + latest), tech-nomics, AI In Context, W3WFocus, About That (CBC playlist) — surfaced real signature differences (e.g. AI In Context shorts have 4.2× promotional density of mid; W3WFocus has 5.6/1k fear language vs CBC's About That at 3.3/1k on same subjects)
 
 - [x] **End-to-end validation**: Full pipeline validated against @atmoio channel (5 transcripts)
   - [x] `discover` → 49 videos, slug correctly derived from `@handle` URL
