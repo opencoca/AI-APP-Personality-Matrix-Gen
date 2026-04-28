@@ -859,6 +859,95 @@ def cmd_fetch_one(args) -> None:
     print(f"Saved: {out_path} ({word_ct:,} words)")
 
 
+# Threshold below which a transcript is considered "needs punctuation cleanup".
+# Auto-captions for some channels arrive without sentence boundaries — this wrecks
+# Flesch-Kincaid (the whole transcript reads as one giant run-on sentence).
+_PUNCT_DENSITY_FLOOR = 1 / 50  # at least 1 sentence-ending mark per 50 words
+
+
+def _punct_density(body: str) -> float:
+    """Return ratio of sentence-ending marks to words."""
+    words = len(body.split()) or 1
+    marks = body.count(".") + body.count("?") + body.count("!")
+    return marks / words
+
+
+def _cleaned_path(tx_file: pathlib.Path) -> pathlib.Path:
+    """Path of the cleaned sibling for a transcript: foo.md → foo.cleaned.md."""
+    return tx_file.with_suffix(".cleaned.md")
+
+
+def cmd_clean(args) -> None:
+    """Restore punctuation in low-density transcripts using a BERT model.
+
+    Writes `{video_id}.cleaned.md` siblings; original files are left untouched.
+    `cmd_analyze` automatically prefers the cleaned version when present.
+    Idempotent — re-runs skip already-cleaned transcripts unless --force.
+    """
+    try:
+        from deepmultilingualpunctuation import PunctuationModel
+    except ImportError:
+        print(
+            "Error: deepmultilingualpunctuation not installed.\n"
+            "Install with: uv pip install -e \".[punct]\"\n"
+            "(or: uv pip install deepmultilingualpunctuation)",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    cache_root = get_cache_root(args.cache_dir)
+    slug = args.slug
+    tx_dir = channel_cache_dir(slug, cache_root) / "transcripts"
+    if not tx_dir.exists():
+        print(f"No transcripts directory for '{slug}'.", file=sys.stderr)
+        sys.exit(1)
+
+    # Find candidates: original transcripts (skip *.cleaned.md siblings) where
+    # density is below floor and no cleaned sibling exists yet (unless --force).
+    candidates: list[tuple[pathlib.Path, dict, str]] = []
+    skipped_already_clean = 0
+    skipped_dense = 0
+    for f in sorted(tx_dir.glob("*.md")):
+        if f.name.endswith(".cleaned.md"):
+            continue
+        cleaned = _cleaned_path(f)
+        if cleaned.exists() and not args.force:
+            skipped_already_clean += 1
+            continue
+        meta, body = parse_frontmatter(f.read_text(encoding="utf-8"))
+        if not body.strip():
+            continue
+        if _punct_density(body) >= _PUNCT_DENSITY_FLOOR and not args.force:
+            skipped_dense += 1
+            continue
+        candidates.append((f, meta, body))
+
+    if skipped_already_clean:
+        print(f"  {skipped_already_clean} transcript(s) already cleaned (use --force to redo)")
+    if skipped_dense:
+        print(f"  {skipped_dense} transcript(s) have sufficient punctuation, skipped")
+    if not candidates:
+        print(f"Nothing to clean for '{slug}'.")
+        return
+
+    print(f"Loading BERT punctuation model (first run downloads ~500MB)...")
+    model = PunctuationModel()
+    print(f"Cleaning {len(candidates)} transcript(s)...")
+
+    for f, meta, body in candidates:
+        before = body.count(".") + body.count("?") + body.count("!")
+        # restore_punctuation handles long inputs internally by chunking
+        cleaned_body = model.restore_punctuation(body)
+        after = cleaned_body.count(".") + cleaned_body.count("?") + cleaned_body.count("!")
+        meta["punctuation_status"] = "restored-bert"
+        meta["original_sentence_marks"] = before
+        meta["restored_sentence_marks"] = after
+        _cleaned_path(f).write_text(render_frontmatter(meta, cleaned_body), encoding="utf-8")
+        print(f"  {f.name}: {before} → {after} sentence marks")
+
+    print(f"\nDone. Re-run 'analyze {slug}' to use the cleaned transcripts.")
+
+
 def cmd_analyze(args) -> None:
     cache_root = get_cache_root(args.cache_dir)
     slug = args.slug
@@ -874,9 +963,15 @@ def cmd_analyze(args) -> None:
         print(f"No transcript files in {tx_dir}.", file=sys.stderr)
         sys.exit(1)
 
+    # Prefer cleaned siblings when present — `clean` produces foo.cleaned.md from foo.md
+    # so the analysis sees BERT-restored punctuation, fixing FK grade calculation.
     all_transcripts = []
     for tx_file in tx_files:
-        meta, body = parse_frontmatter(tx_file.read_text(encoding="utf-8"))
+        if tx_file.name.endswith(".cleaned.md"):
+            continue  # cleaned versions handled via their original-file pairing
+        cleaned = _cleaned_path(tx_file)
+        source = cleaned if cleaned.exists() else tx_file
+        meta, body = parse_frontmatter(source.read_text(encoding="utf-8"))
         if body.strip():
             all_transcripts.append({"meta": meta, "body": body})
 
@@ -993,6 +1088,8 @@ def _analyze_bucket(slug: str, cache_root: pathlib.Path, transcripts: list[dict]
         w for w, c in theme_candidates.items()
         if c >= threshold and w in word_freq
     ]
+    # Capture full count BEFORE truncation — that's the thematic-concentration metric
+    recurring_themes_total = len(recurring_themes)
     recurring_themes.sort(key=lambda w: -word_freq[w])
     recurring_themes = recurring_themes[:20]
 
@@ -1168,6 +1265,10 @@ Rates are per 1,000 words of total transcript content.
         "hapax_count": hapax_count,
         "ttr": round(ttr, 4),
         "top_100_coverage_pct": round(cov_100, 2),
+        "fk_grade": round(fk_grade, 1),
+        # Thematic concentration: # words appearing in ≥50% of transcripts.
+        # High count = same handful of subjects hammered across videos.
+        "recurring_themes_count": recurring_themes_total,
         # Raw counts for cross-bucket comparison (compare.md reads frontmatter, not body)
         "fear_count": fear_count,
         "urgency_count": urgency_count,
@@ -1379,13 +1480,19 @@ def _write_global_report(cache_root: pathlib.Path) -> None:
             b for b in ("shorts", "mid", "long")
             if (chan_dir / f"profile-{b}.md").exists()
         ]
+        unique = an_meta.get("total_unique", 0)
+        hapax = an_meta.get("hapax_count", 0)
         rows.append({
             "slug": chan_dir.name,
             "channel": prof_meta.get("channel", chan_dir.name),
             "transcripts": prof_meta.get("transcripts_used", 0),
             "words": an_meta.get("total_words_analyzed", 0),
-            "unique": an_meta.get("total_unique", 0),
+            "unique": unique,
             "ttr": an_meta.get("ttr", 0.0),
+            "fk_grade": an_meta.get("fk_grade", 0.0),
+            "top100_pct": an_meta.get("top_100_coverage_pct", 0.0),
+            "hapax_pct": (hapax / unique * 100) if unique else 0.0,
+            "themes_count": an_meta.get("recurring_themes_count", 0),
             "relevance": prof_meta.get("relevance", 0.0),
             "accuracy": prof_meta.get("accuracy", 0.0),
             "generated": prof_meta.get("generated", "—"),
@@ -1401,10 +1508,16 @@ def _write_global_report(cache_root: pathlib.Path) -> None:
     # Sort by transcripts desc (richest research first), then channel name
     rows.sort(key=lambda r: (-r["transcripts"], r["slug"]))
 
-    # Summary table — one row per channel, link goes to channel index.md
+    # Summary table — one row per channel, link goes to channel index.md.
+    # Top-100% and Hapax% expose vocabulary variation: high Top-100 = repetitive
+    # (formulaic), high Hapax = varied (each video introduces unique nouns).
+    # Column headers carry markdown footnote refs ([^id]) — definitions live at
+    # the bottom of the body and render in Obsidian/SilverBullet on hover/click.
     table_header = (
-        "| Channel | Transcripts | Words | Unique | TTR | Confidence | Buckets | Last analyzed |\n"
-        "|---|---:|---:|---:|---:|---|---|---|"
+        "| Channel | Tx[^tx] | Words[^words] | Unique[^unique] | Grade[^grade] | "
+        "TTR[^ttr] | Top-100[^top100] | Hapax[^hapax] | Themes[^themes] | "
+        "Confidence[^conf] | Buckets[^buckets] |\n"
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|"
     )
     table_rows = []
     for r in rows:
@@ -1416,9 +1529,47 @@ def _write_global_report(cache_root: pathlib.Path) -> None:
         confidence = f"{r['relevance']:.2f} / {r['accuracy']:.2f}"
         table_rows.append(
             f"| {chan_link} | {r['transcripts']} | {r['words']:,} | {r['unique']:,} | "
-            f"{r['ttr']:.3f} | {confidence} | {bucket_cell} | {r['generated']} |"
+            f"{r['fk_grade']:.1f} | {r['ttr']:.3f} | {r['top100_pct']:.1f}% | "
+            f"{r['hapax_pct']:.1f}% | {r['themes_count']} | {confidence} | {bucket_cell} |"
         )
     table = table_header + "\n" + "\n".join(table_rows)
+
+    # Variation Index — sort by Top-100 coverage descending. High coverage = a
+    # small set of words covers most of the speech = repetitive / formulaic.
+    # Low coverage = vocabulary spreads across many words = varied / wide-ranging.
+    variation_rows = sorted(rows, key=lambda r: -r["top100_pct"])
+    variation_header = (
+        "| Channel | Top-100[^top100] covers | Hapax[^hapax] % | TTR[^ttr] | Themes[^themes] | Read |\n"
+        "|---|---:|---:|---:|---:|---|"
+    )
+    variation_lines = [variation_header]
+    for r in variation_rows:
+        chan_link = f"[[{r['slug']}/profile\\|{r['channel']}]]"
+        # Lexical lane (Top-100 coverage)
+        if r["top100_pct"] >= 45:
+            lex = "formulaic vocab"
+        elif r["top100_pct"] >= 35:
+            lex = "repetitive vocab"
+        elif r["top100_pct"] >= 28:
+            lex = "moderate vocab"
+        else:
+            lex = "varied vocab"
+        # Thematic lane — high theme count at small corpus is meaningful;
+        # at large corpus it means truly persistent core subjects.
+        # Thresholds tuned empirically on observed channel mix.
+        if r["themes_count"] >= 60:
+            thematic = "very narrow themes"
+        elif r["themes_count"] >= 30:
+            thematic = "focused themes"
+        elif r["themes_count"] >= 12:
+            thematic = "moderate themes"
+        else:
+            thematic = "wide-ranging themes"
+        variation_lines.append(
+            f"| {chan_link} | {r['top100_pct']:.1f}% | {r['hapax_pct']:.1f}% | "
+            f"{r['ttr']:.3f} | {r['themes_count']} | {lex}, {thematic} |"
+        )
+    variation_table = "\n".join(variation_lines)
 
     # Quick-card section — one paragraph per channel with sibling report links
     cards = []
@@ -1437,15 +1588,71 @@ def _write_global_report(cache_root: pathlib.Path) -> None:
             f"- **Reports:** {' · '.join(report_links)}"
         )
 
+    # Markdown footnote definitions — referenced by column headers above.
+    # Both Obsidian and SilverBullet render these as tooltips/click-throughs.
+    footnotes = (
+        "[^tx]: Number of transcripts analyzed for this channel (after fetch).\n"
+        "[^words]: Total words across all analyzed transcripts (raw count, "
+        "including common words like 'the' and 'is').\n"
+        "[^unique]: Total unique content words after the stopword filter "
+        "(strips ~120 common English words like articles, prepositions, "
+        "and pronouns to surface meaningful vocabulary).\n"
+        "[^grade]: Flesch-Kincaid Grade Level — approximates the US school year "
+        "needed to comfortably read the text. Grade 7 ≈ middle school, Grade 12 ≈ "
+        "high-school senior, Grade 16+ ≈ college/graduate. Sentence length and "
+        "syllable density drive the score; punctuation must be present for it to "
+        "be meaningful (run `clean` for low-punctuation transcripts).\n"
+        "[^ttr]: Type-Token Ratio — unique content tokens divided by total content "
+        "tokens. Range 0–1. Higher = more lexical variety; lower = more repetition. "
+        "**Caveat:** TTR is corpus-size sensitive — bigger corpora always show "
+        "lower TTR mechanically, so direct cross-channel comparison is unreliable. "
+        "Use Top-100 coverage for fairer comparison.\n"
+        "[^top100]: Top-100 coverage — what percentage of all content speech is "
+        "covered by the channel's 100 most-frequent content words. **Higher = "
+        "more formulaic / repetitive** (a small core set dominates); **lower = "
+        "broader vocabulary**. More robust than TTR for cross-channel comparison "
+        "because it doesn't depend on corpus size.\n"
+        "[^hapax]: Hapax percentage — share of the channel's unique vocabulary "
+        "that appears exactly once across all transcripts. Hapax legomenon "
+        "(Greek: 'said once') signals long-tail vocabulary diversity. High % at "
+        "moderate corpus size = each video introduces fresh nouns / proper names "
+        "(varied storytelling). Low % = a tight repeated vocabulary.\n"
+        "[^themes]: Thematic concentration — count of content words that appear in "
+        "**at least 50% of transcripts**. This catches what vocabulary metrics miss: "
+        "a channel can have varied incidental words while hammering the same handful "
+        "of subjects across every video. High count = same subjects keep coming "
+        "back (e.g. politics channels returning to the same names/issues); low "
+        "count = each video has its own focus. **Caveat:** the 50% threshold is "
+        "easier to hit with small corpora (≤10 transcripts), so compare similar-size "
+        "channels for the cleanest signal.\n"
+        "[^conf]: Confidence scores — `relevance / accuracy`, both 0–1. "
+        "Relevance combines recency (40%), topic diversity (30%), and format "
+        "diversity (30%). Accuracy combines sample size (40%), consistency (35%), "
+        "and transcript quality (25%). Higher is better; under 0.5 means the "
+        "voice profile should be treated as preliminary.\n"
+        "[^buckets]: Duration-tiered sub-reports. Each transcript is bucketed by "
+        "video length: **shorts** (< 5 min), **mid** (5–36 min), **long** (≥ 36 "
+        "min). Each bucket gets its own analysis/profile so format-specific voice "
+        "patterns surface (e.g. shorts as fear-promo teasers vs long-form essays).\n"
+    )
+
     body = (
         "# Channel Library\n\n"
         "Cross-channel index of all YouTube voice/personality analyses. "
-        "Click any channel to dive in — every report is interlinked.\n\n"
+        "Click any channel to dive in — every report is interlinked. "
+        "Hover any column term[^tx] for a definition.\n\n"
         "## Channels\n\n"
         f"{table}\n\n"
+        "## Variation Index\n\n"
+        "Ranked by **Top-100 coverage**[^top100] — what % of total speech is covered "
+        "by the channel's 100 most common content words. Higher = more repetitive / "
+        "formulaic; lower = broader vocabulary. Hapax %[^hapax] shows the long tail "
+        "(% of words used exactly once).\n\n"
+        f"{variation_table}\n\n"
         "## Quick Profiles\n\n"
         + "\n\n".join(cards)
-        + "\n"
+        + "\n\n---\n\n## Glossary\n\n"
+        + footnotes
     )
     meta = {
         "generated": datetime.date.today().isoformat(),
@@ -1489,13 +1696,18 @@ def _profile_bucket(slug: str, cache_root: pathlib.Path, bucket: str) -> None:
     an_path = analysis_path(slug, cache_root, bucket)
     an_meta, an_body = parse_frontmatter(an_path.read_text(encoding="utf-8"))
 
-    # Load transcript metadata for confidence scoring — filtered to this bucket
+    # Load transcript metadata for confidence scoring — filtered to this bucket.
+    # Prefer cleaned siblings (BERT punctuation restored) over raw originals.
     tx_dir = channel_cache_dir(slug, cache_root) / "transcripts"
     tx_files = sorted(tx_dir.glob("*.md")) if tx_dir.exists() else []
     tx_metas = []
     tx_top_word_sets = []
     for f in tx_files:
-        m, body = parse_frontmatter(f.read_text(encoding="utf-8"))
+        if f.name.endswith(".cleaned.md"):
+            continue
+        cleaned = _cleaned_path(f)
+        source = cleaned if cleaned.exists() else f
+        m, body = parse_frontmatter(source.read_text(encoding="utf-8"))
         if not m:
             continue
         # Skip transcripts not in this bucket (except for 'all' which keeps everything)
@@ -1842,7 +2054,11 @@ def cmd_enrich(args) -> None:
 
     transcripts = []
     for f in sorted(tx_dir.glob("*.md")):
-        meta, body = parse_frontmatter(f.read_text(encoding="utf-8"))
+        if f.name.endswith(".cleaned.md"):
+            continue
+        cleaned = _cleaned_path(f)
+        source = cleaned if cleaned.exists() else f
+        meta, body = parse_frontmatter(source.read_text(encoding="utf-8"))
         if not body.strip():
             continue
         if bucket != "all":
@@ -1942,6 +2158,13 @@ def main() -> None:
     p = sub.add_parser("fetch-one", parents=[shared], help="Fetch a single transcript (no rate limiting)")
     p.add_argument("video_id", help="YouTube video ID")
 
+    p = sub.add_parser(
+        "clean", parents=[shared],
+        help="Restore punctuation in low-density transcripts via BERT (requires [punct] extra)",
+    )
+    p.add_argument("slug", help="Channel slug")
+    p.add_argument("--force", action="store_true", help="Re-clean even if cleaned siblings exist")
+
     p = sub.add_parser("analyze", parents=[shared], help="Run analysis on cached transcripts (offline)")
     p.add_argument("slug", help="Channel slug")
 
@@ -1979,6 +2202,7 @@ def main() -> None:
         "sample": cmd_sample,
         "fetch": cmd_fetch,
         "fetch-one": cmd_fetch_one,
+        "clean": cmd_clean,
         "analyze": cmd_analyze,
         "profile": cmd_profile,
         "status": cmd_status,

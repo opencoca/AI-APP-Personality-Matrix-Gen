@@ -22,6 +22,14 @@ dev = [
     "pytest-cov>=4.0",
     "ruff>=0.4.0",
 ]
+# BERT-based punctuation restoration for the `clean` command. Heavy install (~2GB
+# for torch + transformers + model weights). Install with: uv pip install -e ".[punct]"
+# transformers pinned <5 because deepmultilingualpunctuation uses the legacy
+# `grouped_entities` pipeline kwarg, removed in transformers 5.x.
+punct = [
+    "deepmultilingualpunctuation>=1.0",
+    "transformers<5",
+]
 
 [project.scripts]
 yt-analyst = "yt_analyst.cli:main"

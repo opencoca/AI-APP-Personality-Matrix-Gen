@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "scripts/yt-cache/natebjones/analysis.md",
-                "mode": "source",
+                "file": "scripts/yt-cache/INDEX.md",
+                "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "analysis"
+              "title": "INDEX"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "scripts/yt-cache/natebjones/analysis.md",
+                "file": "scripts/yt-cache/INDEX.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for analysis"
+              "title": "Backlinks for INDEX"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "scripts/yt-cache/natebjones/analysis.md",
+                "file": "scripts/yt-cache/INDEX.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from analysis"
+              "title": "Outgoing links from INDEX"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "scripts/yt-cache/natebjones/analysis.md",
+                "file": "scripts/yt-cache/INDEX.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of analysis"
+              "title": "Outline of INDEX"
             }
           }
         ]
@@ -185,37 +185,37 @@
   },
   "active": "021a984256473f07",
   "lastOpenFiles": [
-    "scripts/yt-cache/about-that-top/transcripts/mqEEFvr9keI.md",
-    "scripts/yt-cache/about-that-top/transcripts/woCTR--uvFM.md",
-    "scripts/yt-cache/about-that-top/transcripts/cw0R0EOEEyA.md",
+    "scripts/yt-cache/about-that-top/transcripts/KzBwQiMydfY.cleaned.md",
+    "scripts/yt-cache/about-that-top/transcripts/gsNQuCyBvUY.cleaned.md",
+    "scripts/yt-cache/tech-nomics-top/transcripts/ywh8Hp-ZVUM.cleaned.md",
+    "scripts/yt-cache/tech-nomics-top/transcripts/wb_ZY0-Imzc.cleaned.md",
+    "scripts/yt-cache/tech-nomics-top/transcripts/wF5kwCjLCtI.cleaned.md",
+    "scripts/yt-cache/tech-nomics-top/transcripts/lBUYL6nVcAQ.cleaned.md",
+    "scripts/yt-cache/tech-nomics-top/transcripts/YX0j2KSkr0A.cleaned.md",
+    "scripts/yt-cache/tech-nomics-top/transcripts/Vr7YAvYdv1w.cleaned.md",
+    "scripts/yt-cache/tech-nomics-top/transcripts/RwE6swpMDFk.cleaned.md",
+    "scripts/yt-cache/tech-nomics-top/transcripts/Oy0DKRFstU4.cleaned.md",
+    "scripts/yt-cache/tech-nomics-top/transcripts/AnrZktFfbUI.cleaned.md",
     "scripts/yt-cache/about-that-top/transcripts/gsNQuCyBvUY.md",
+    "scripts/yt-cache/about-that-top/transcripts/dcpehUVAx0k.cleaned.md",
+    "scripts/yt-cache/casey-top/transcripts/bzE-IMaegzQ.cleaned.md",
+    "scripts/yt-cache/casey-top/transcripts/WxfZkMm3wcg.cleaned.md",
+    "scripts/yt-cache/casey-top/transcripts/T4L-7S0-mc0.cleaned.md",
+    "scripts/yt-cache/casey-top/transcripts/FtlF-6TnMuo.cleaned.md",
     "scripts/yt-cache/about-that-top/transcripts/dcpehUVAx0k.md",
-    "scripts/yt-cache/about-that-top/transcripts/lHoZUxtsVW0.md",
-    "scripts/yt-cache/about-that-top/transcripts/PWhv-06DNjE.md",
-    "scripts/yt-cache/about-that-top/transcripts/vucON8ZKTec.md",
-    "scripts/yt-cache/about-that-top/transcripts/z6QlFpPMPKQ.md",
-    "scripts/yt-cache/about-that-top/transcripts",
-    "scripts/yt-cache/about-that-top/index.md",
-    "scripts/yt-cache/about-that-top",
-    "scripts/yt-cache/about-that/index.md",
-    "scripts/yt-cache/about-that",
-    "scripts/yt-cache/w3wfocus/profile-long.md",
-    "scripts/yt-cache/w3wfocus/profile-mid.md",
-    "scripts/yt-cache/w3wfocus/profile.md",
-    "scripts/yt-cache/w3wfocus/compare.md",
-    "scripts/yt-cache/w3wfocus/analysis-long.md",
-    "scripts/yt-cache/w3wfocus/analysis-mid.md",
-    "scripts/yt-cache/w3wfocus/analysis.md",
-    "scripts/yt-cache/w3wfocus/transcripts/DAPVAkLiVp4.md",
     "scripts/yt-cache/w3wfocus/transcripts/FqPqmkY2ArI.md",
-    "scripts/yt-cache/w3wfocus/transcripts/z4Cj4l9G7oI.md",
+    "scripts/yt-cache/about-that-top/transcripts/woCTR--uvFM.cleaned.md",
+    "scripts/yt-cache/about-that-top/transcripts/mqEEFvr9keI.cleaned.md",
+    "scripts/yt-cache/about-that-top/transcripts/lHoZUxtsVW0.cleaned.md",
     "scripts/yt-cache/w3wfocus/transcripts/_sZbsgvvkS4.md",
-    "scripts/yt-cache/w3wfocus/transcripts/SkcyysBt0Ew.md",
+    "scripts/yt-cache/about-that-top/transcripts/cw0R0EOEEyA.md",
+    "scripts/yt-cache/about-that-top/transcripts/mqEEFvr9keI.md",
+    "scripts/yt-cache/about-that-top/transcripts/lHoZUxtsVW0.md",
+    "scripts/yt-cache/about-that-top/transcripts",
+    "scripts/yt-cache/about-that-top",
+    "scripts/yt-cache/about-that",
     "scripts/yt-cache/w3wfocus/transcripts",
-    "scripts/yt-cache/w3wfocus/index.md",
     "scripts/yt-cache/w3wfocus",
-    "scripts/yt-cache/INDEX.md",
-    "scripts/yt-cache/casey-latest/analysis-mid.md",
     "scripts/yt-cache/tech-nomics-top/transcripts",
     "scripts/yt-cache/tech-nomics-top",
     "scripts/yt-cache/tech-nomics",
