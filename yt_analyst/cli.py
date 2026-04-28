@@ -8,6 +8,7 @@ import copy
 import datetime
 import json
 import math
+import os
 import pathlib
 import random
 import re
@@ -73,6 +74,62 @@ CRITICISM_WORDS = {
     "dangerous", "misleading", "harmful", "waste", "disappointing", "overrated",
     "broken", "useless", "absurd", "ridiculous",
 }
+
+# Fear / threat / risk language — high counts indicate fear-driven framing
+FEAR_WORDS = {
+    "extinction", "threat", "danger", "dangerous", "doom", "catastrophe",
+    "catastrophic", "risk", "crisis", "collapse", "unsafe", "attack",
+    "weapon", "war", "destroy", "destroyed", "killing", "kill", "scary",
+    "terrifying", "horror", "alarming", "warning", "lose", "losing",
+    "uncontrolled", "exterminate",
+}
+
+# Time-pressure / urgency markers
+URGENCY_WORDS = {
+    "now", "urgent", "urgently", "immediately", "asap", "today",
+    "deadline", "race", "rush", "quickly", "fast", "soon", "must",
+    "before", "behind", "catching",
+}
+
+# Hype / superlative excitement — separate from PRAISE_WORDS which is more general
+HYPE_WORDS = {
+    "revolutionary", "breakthrough", "unprecedented", "historic",
+    "mind-blowing", "insane", "unbelievable", "shocking", "wild", "crazy",
+    "astonishing",
+}
+
+# Promotional CTAs (regex patterns — phrases, not single words)
+PROMOTION_PATTERNS = [
+    r"full video( link)?( above| below| in (the )?description)?",
+    r"watch (the )?(full|whole|entire) (video|episode)",
+    r"link in (the )?(description|bio|comments)",
+    r"\bsubscribe\b", r"smash (that|the) (like|subscribe)",
+    r"if you enjoyed", r"check out (my|our|the) (channel|other)",
+    r"more (videos|on this|like this)", r"click (below|here|the link)",
+    r"hit the bell", r"join (my|our|the) (channel|community)",
+]
+
+# Authority / citation patterns
+AUTHORITY_PATTERNS = [
+    r"according to", r"research (shows|suggests|indicates)",
+    r"(a |the )?study (found|shows|says|suggests)",
+    r"scientists (say|believe|warn)", r"experts (agree|warn|say)",
+    r"data (shows|suggests)", r"the report (says|finds)",
+    r"published in", r"peer[- ]reviewed",
+]
+
+# Imperatives (you-directed directives)
+IMPERATIVE_PATTERNS = [
+    r"\byou should\b", r"\byou must\b", r"\byou need to\b",
+    r"\byou have to\b", r"\bremember to\b", r"\bdon'?t (forget|miss)\b",
+]
+
+# Comparative framing
+COMPARATIVE_PATTERNS = [
+    r"\bbetter than\b", r"\bworse than\b", r"\bunlike\b",
+    r"\bcompared to\b", r"\binstead of\b", r"\bversus\b",
+    r"\bbefore and after\b",
+]
 
 FORMAT_KEYWORDS = {
     "presentation": ["presentation", "talk", "keynote", "lecture", "seminar", "speech"],
@@ -228,6 +285,40 @@ def profile_path(slug: str, cache_root: pathlib.Path, bucket: str = "all") -> pa
     return channel_cache_dir(slug, cache_root) / f"profile{_bucket_suffix(bucket)}.md"
 
 
+def _nav_links(slug: str, cache_root: pathlib.Path, current_file: str) -> str:
+    """Build a markdown line of Obsidian wiki links to sibling reports in this channel.
+
+    Renders a navigation breadcrumb at the top of each report file so readers can
+    jump between profile/analysis/compare/themes/index without leaving their note.
+    `current_file` (e.g. 'profile') is excluded from the link list to avoid self-loops.
+    """
+    chan_dir = channel_cache_dir(slug, cache_root)
+    pieces: list[tuple[str, str]] = []  # (filename-without-ext, label)
+
+    if (chan_dir / "index.md").exists() and current_file != "index":
+        pieces.append(("index", "Channel Index"))
+    if (chan_dir / "profile.md").exists() and current_file != "profile":
+        pieces.append(("profile", "Voice Profile"))
+    if (chan_dir / "analysis.md").exists() and current_file != "analysis":
+        pieces.append(("analysis", "Full Analysis"))
+    if (chan_dir / "compare.md").exists() and current_file != "compare":
+        pieces.append(("compare", "Bucket Comparison"))
+    if (chan_dir / "themes.md").exists() and current_file != "themes":
+        pieces.append(("themes", "LLM Themes"))
+
+    # Per-bucket variants — shown only if the current file isn't already that bucket
+    for bucket in BUCKET_THRESHOLDS.keys():
+        suffix = _bucket_suffix(bucket)
+        for kind, label_root in (("analysis", "Analysis"), ("profile", "Profile"), ("themes", "Themes")):
+            fname = f"{kind}{suffix}"
+            if (chan_dir / f"{fname}.md").exists() and current_file != fname:
+                pieces.append((fname, f"{label_root} ({bucket})"))
+
+    links = " · ".join(f"[[{slug}/{name}|{label}]]" for name, label in pieces)
+    library = "[[INDEX|← Channel Library]]"
+    return f"{library} · {links}\n" if links else f"{library}\n"
+
+
 # ─── Text & Slug Utilities ────────────────────────────────────────────────────
 
 def slugify(name: str) -> str:
@@ -326,7 +417,7 @@ def write_index(slug: str, meta: dict, body: str, cache_root: pathlib.Path) -> N
     index_path(slug, cache_root).write_text(render_frontmatter(meta, body), encoding="utf-8")
 
 
-def _index_body(meta: dict) -> str:
+def _index_body(meta: dict, slug: str = "", cache_root: pathlib.Path = None) -> str:
     videos = meta.get("videos", [])
     fetched = sum(1 for v in videos if v["status"] == "fetched")
     selected = sum(1 for v in videos if v["status"] == "selected")
@@ -336,8 +427,12 @@ def _index_body(meta: dict) -> str:
     status_order = {"fetched": 0, "selected": 1, "pending": 2, "skipped": 3, "failed": 4}
     sorted_videos = sorted(videos, key=lambda v: status_order.get(v["status"], 9))
 
+    nav = _nav_links(slug, cache_root, "index") if slug and cache_root else ""
+
     lines = [
         f"# {name} — Channel Index",
+        "",
+        nav.rstrip(),
         "",
         f"Discovered {total} videos. {fetched} fetched, {selected} selected.",
         "",
@@ -389,12 +484,26 @@ def cmd_discover(args) -> None:
         print("No videos found.", file=sys.stderr)
         sys.exit(1)
 
-    channel_name = raw_entries[0].get("channel") or raw_entries[0].get("uploader")
-    if not channel_name:
-        # yt-dlp flat-playlist entries omit channel on @handle URLs — extract from URL
-        m = re.search(r"/@([^/?#]+)", url) or re.search(r"/channel/([^/?#]+)", url)
-        channel_name = m.group(1) if m else "unknown-channel"
-    channel_id = raw_entries[0].get("channel_id") or ""
+    # Playlist mode: when the URL has a `list=` param, treat the playlist as the
+    # subject. Use the playlist title for the slug so downstream profile/analysis
+    # files belong to the playlist, not whatever channel hosted the first video.
+    playlist_id = ""
+    m_list = re.search(r"[?&]list=([A-Za-z0-9_-]+)", url)
+    if m_list:
+        playlist_id = m_list.group(1)
+        playlist_title = raw_entries[0].get("playlist_title") or raw_entries[0].get("playlist") or ""
+        if playlist_title:
+            channel_name = playlist_title
+        else:
+            channel_name = f"playlist-{playlist_id[:8]}"
+        channel_id = raw_entries[0].get("channel_id") or ""
+    else:
+        channel_name = raw_entries[0].get("channel") or raw_entries[0].get("uploader")
+        if not channel_name:
+            # yt-dlp flat-playlist entries omit channel on @handle URLs — extract from URL
+            m = re.search(r"/@([^/?#]+)", url) or re.search(r"/channel/([^/?#]+)", url)
+            channel_name = m.group(1) if m else "unknown-channel"
+        channel_id = raw_entries[0].get("channel_id") or ""
     slug = slugify(channel_name)
 
     new_videos = []
@@ -424,6 +533,9 @@ def cmd_discover(args) -> None:
         "total_videos": len(new_videos),
         "videos": new_videos,
     }
+    if playlist_id:
+        meta["playlist_id"] = playlist_id
+        meta["source_url"] = url
     fetched = sum(1 for v in new_videos if v["status"] == "fetched")
     pending = sum(1 for v in new_videos if v["status"] == "pending")
     body = (
@@ -452,7 +564,7 @@ def cmd_sample(args) -> None:
         for v in fork_meta.get("videos", []):
             if v["status"] != "fetched":
                 v["status"] = "pending"
-        write_index(target_slug, fork_meta, _index_body(fork_meta), cache_root)
+        write_index(target_slug, fork_meta, _index_body(fork_meta, target_slug, cache_root), cache_root)
         print(f"  Forked '{slug}' → '{target_slug}'")
 
     meta, _ = read_index(target_slug, cache_root)
@@ -526,7 +638,7 @@ def cmd_sample(args) -> None:
             selected_count = len(selected_ids)
 
     meta["videos"] = videos
-    write_index(target_slug, meta, _index_body(meta), cache_root)
+    write_index(target_slug, meta, _index_body(meta, target_slug, cache_root), cache_root)
     print(f"Selected {selected_count} videos for '{target_slug}'.")
 
 
@@ -643,7 +755,7 @@ def cmd_fetch(args) -> None:
 
         if status == 0:
             print(f"Connection error: {content}. Stopping session.", file=sys.stderr)
-            write_index(slug, meta, _index_body(meta), cache_root)
+            write_index(slug, meta, _index_body(meta, slug, cache_root), cache_root)
             sys.exit(1)
 
         if status == 429:
@@ -652,7 +764,7 @@ def cmd_fetch(args) -> None:
             status, content = _post_transcript(mcp_url, mcp_token, video_id)
             if status == 429:
                 print("Still rate limited. Stopping session.", file=sys.stderr)
-                write_index(slug, meta, _index_body(meta), cache_root)
+                write_index(slug, meta, _index_body(meta, slug, cache_root), cache_root)
                 sys.exit(1)
 
         if status >= 500:
@@ -664,7 +776,7 @@ def cmd_fetch(args) -> None:
                 video["status"] = "failed"
                 video["error"] = f"HTTP {status}"
                 video["failed_date"] = now_iso()
-                write_index(slug, meta, _index_body(meta), cache_root)
+                write_index(slug, meta, _index_body(meta, slug, cache_root), cache_root)
                 continue
 
         if status == 200:
@@ -674,7 +786,7 @@ def cmd_fetch(args) -> None:
                 video["status"] = "failed"
                 video["error"] = "unavailable"
                 video["failed_date"] = now_iso()
-                write_index(slug, meta, _index_body(meta), cache_root)
+                write_index(slug, meta, _index_body(meta, slug, cache_root), cache_root)
                 continue
 
             word_ct = count_words(content)
@@ -701,7 +813,7 @@ def cmd_fetch(args) -> None:
             video["error"] = f"HTTP {status}"
             video["failed_date"] = now_iso()
 
-        write_index(slug, meta, _index_body(meta), cache_root)
+        write_index(slug, meta, _index_body(meta, slug, cache_root), cache_root)
         request_count += 1
 
         if request_count >= max_per_session:
@@ -788,6 +900,18 @@ def cmd_analyze(args) -> None:
         if not transcripts:
             continue
         _analyze_bucket(slug, cache_root, transcripts, bucket)
+
+    # Auto-generate compare.md when there's actually something to compare
+    # (need "all" + at least 2 specific buckets for a meaningful comparison).
+    existing_buckets = [
+        b for b in ("all", *BUCKET_THRESHOLDS.keys())
+        if analysis_path(slug, cache_root, b).exists()
+    ]
+    if len(existing_buckets) >= 3:
+        _write_compare(slug, cache_root, existing_buckets)
+
+    # Refresh the cross-channel library index so the new analysis surfaces immediately.
+    _write_global_report(cache_root)
 
 
 def _analyze_bucket(slug: str, cache_root: pathlib.Path, transcripts: list[dict], bucket: str) -> None:
@@ -898,6 +1022,35 @@ def _analyze_bucket(slug: str, cache_root: pathlib.Path, transcripts: list[dict]
     top_30_str = ", ".join(w for w, _ in top_100[:30])
     themes_str = ", ".join(recurring_themes[:15]) if recurring_themes else "Insufficient sample."
 
+    # ── Vocabulary Distribution (Zipfian shape) ──
+    # word_freq counts CONTENT tokens (after STOP_WORDS filter via tokenize()), so
+    # numbers reflect a creator's content vocabulary, not common-word noise.
+    total_unique = len(word_freq)
+    sorted_counts = sorted(word_freq.values(), reverse=True)
+    hapax_count = sum(1 for c in sorted_counts if c == 1)
+    dis_count = sum(1 for c in sorted_counts if c == 2)
+    tris_count = sum(1 for c in sorted_counts if c == 3)
+    once_pct = (hapax_count / total_unique * 100) if total_unique else 0.0
+
+    # Cumulative coverage: how much of total speech is covered by the top N words
+    def _coverage(top_n: int) -> float:
+        if not total_tokens or not sorted_counts:
+            return 0.0
+        return sum(sorted_counts[:top_n]) / total_tokens * 100
+
+    cov_20 = _coverage(20)
+    cov_50 = _coverage(50)
+    cov_100 = _coverage(100)
+    cov_500 = _coverage(500)
+
+    # ASCII bar chart: top 20 words, bar length scaled to max count
+    bar_max = top_100[0][1] if top_100 else 1
+    chart_lines = []
+    for word, count in top_100[:20]:
+        bar = "█" * max(1, int((count / bar_max) * 30))
+        chart_lines.append(f"{word:<14} {bar} {count}")
+    chart_block = "\n".join(chart_lines) if chart_lines else "(no content words found)"
+
     vocab_section = f"""## Vocabulary Fingerprint
 
 Analyzed {len(transcripts)} transcript(s) totalling {total_words:,} words across {len(sentences):,} sentences.
@@ -910,6 +1063,28 @@ Analyzed {len(transcripts)} transcript(s) totalling {total_words:,} words across
 
 **Filler words / verbal tics:**
 {filler_lines}
+
+## Vocabulary Distribution
+
+**Total unique content words:** {total_unique:,}
+**Total content tokens:** {total_tokens:,}
+
+**Long-tail shape:**
+- Used exactly once (hapax): {hapax_count:,} ({once_pct:.1f}% of unique vocab)
+- Used twice: {dis_count:,}
+- Used three times: {tris_count:,}
+
+**Cumulative coverage** — how much of total content speech is covered by the top N words:
+- Top 20 words: {cov_20:.1f}%
+- Top 50 words: {cov_50:.1f}%
+- Top 100 words: {cov_100:.1f}%
+- Top 500 words: {cov_500:.1f}%
+
+**Top 20 by frequency:**
+
+```
+{chart_block}
+```
 """
 
     structure_section = f"""## Script Structure
@@ -939,7 +1114,46 @@ Analyzed {len(transcripts)} transcript(s) totalling {total_words:,} words across
 **Dominant mode:** {_dominant_address(you_count, we_count, one_count)}
 """
 
-    body = f"{vocab_section}\n{structure_section}\n{personality_section}\n{tone_section}"
+    # ── 4e: Thematic Signals ──
+    # Per-1000-word rates so buckets/channels compare fairly.
+    def _rate(count: int) -> float:
+        return (count / total_words * 1000) if total_words else 0.0
+
+    fear_count = sum(word_freq.get(w, 0) for w in FEAR_WORDS)
+    urgency_count = sum(word_freq.get(w, 0) for w in URGENCY_WORDS)
+    hype_count = sum(word_freq.get(w, 0) for w in HYPE_WORDS)
+
+    def _pattern_count(patterns: list[str]) -> int:
+        return sum(len(re.findall(p, all_text.lower())) for p in patterns)
+
+    promo_count = _pattern_count(PROMOTION_PATTERNS)
+    authority_count = _pattern_count(AUTHORITY_PATTERNS)
+    imperative_count = _pattern_count(IMPERATIVE_PATTERNS)
+    comparative_count = _pattern_count(COMPARATIVE_PATTERNS)
+
+    fear_top = sorted([w for w in FEAR_WORDS if w in word_freq], key=lambda w: -word_freq[w])[:6]
+    urgency_top = sorted([w for w in URGENCY_WORDS if w in word_freq], key=lambda w: -word_freq[w])[:6]
+    hype_top = sorted([w for w in HYPE_WORDS if w in word_freq], key=lambda w: -word_freq[w])[:6]
+
+    thematic_section = f"""## Thematic Signals
+
+Rates are per 1,000 words of total transcript content.
+
+**Fear / threat language:** {fear_count} ({_rate(fear_count):.1f}/1k, {_intensity_label(_rate(fear_count), 2, 5)})
+  Top: {", ".join(fear_top) or "none"}
+**Urgency markers:** {urgency_count} ({_rate(urgency_count):.1f}/1k, {_intensity_label(_rate(urgency_count), 3, 8)})
+  Top: {", ".join(urgency_top) or "none"}
+**Hype / superlatives:** {hype_count} ({_rate(hype_count):.1f}/1k, {_intensity_label(_rate(hype_count), 1, 3)})
+  Top: {", ".join(hype_top) or "none"}
+**Promotional CTAs:** {promo_count} ({_rate(promo_count):.1f}/1k, {_intensity_label(_rate(promo_count), 0.5, 2)})
+**Authority citations:** {authority_count} ({_rate(authority_count):.1f}/1k, {_intensity_label(_rate(authority_count), 0.3, 1)})
+**Imperative directives:** {imperative_count} ({_rate(imperative_count):.1f}/1k, {_intensity_label(_rate(imperative_count), 1, 3)})
+**Comparative framing:** {comparative_count} ({_rate(comparative_count):.1f}/1k, {_intensity_label(_rate(comparative_count), 0.5, 2)})
+"""
+
+    nav = _nav_links(slug, cache_root, f"analysis{_bucket_suffix(bucket)}")
+    title = f"# Analysis: {channel}" + (f" ({bucket})" if bucket != "all" else "")
+    body = f"{title}\n\n{nav}\n{vocab_section}\n{structure_section}\n{personality_section}\n{tone_section}\n{thematic_section}"
     an_meta = {
         "subject": channel,
         "channel": channel,
@@ -948,6 +1162,20 @@ Analyzed {len(transcripts)} transcript(s) totalling {total_words:,} words across
         "transcripts_analyzed": len(transcripts),
         "date_range": date_range,
         "total_words_analyzed": total_words,
+        # Vocab shape — surfaced in compare.md for cross-bucket Zipf comparison
+        "total_unique": total_unique,
+        "total_tokens": total_tokens,
+        "hapax_count": hapax_count,
+        "ttr": round(ttr, 4),
+        "top_100_coverage_pct": round(cov_100, 2),
+        # Raw counts for cross-bucket comparison (compare.md reads frontmatter, not body)
+        "fear_count": fear_count,
+        "urgency_count": urgency_count,
+        "hype_count": hype_count,
+        "promo_count": promo_count,
+        "authority_count": authority_count,
+        "imperative_count": imperative_count,
+        "comparative_count": comparative_count,
     }
     out = analysis_path(slug, cache_root, bucket)
     out.write_text(render_frontmatter(an_meta, body), encoding="utf-8")
@@ -982,11 +1210,257 @@ def _dominant_address(you: int, we: int, one: int) -> str:
     return "authoritative (impersonal dominant)"
 
 
+def _intensity_label(rate: float, mod_threshold: float, high_threshold: float) -> str:
+    """Three-tier label for per-1k-word rates. Thresholds tuned per dimension."""
+    if rate >= high_threshold: return "high"
+    if rate >= mod_threshold: return "moderate"
+    return "low"
+
+
 def _compute_date_range(transcripts: list[dict]) -> str:
     dates = [str(t["meta"].get("date", ""))[:7] for t in transcripts if t["meta"].get("date")]
     if not dates:
         return "unknown"
     return f"{min(dates)} to {max(dates)}"
+
+
+# Dimensions surfaced in compare.md — keep keys aligned with frontmatter fields written
+# by _analyze_bucket so the comparison can read them without re-parsing the body.
+_COMPARE_DIMENSIONS = [
+    ("fear",        "Fear / threat"),
+    ("urgency",     "Urgency"),
+    ("hype",        "Hype / superlatives"),
+    ("promo",       "Promotional CTAs"),
+    ("authority",   "Authority citations"),
+    ("imperative",  "Imperative directives"),
+    ("comparative", "Comparative framing"),
+]
+
+
+def _write_compare(slug: str, cache_root: pathlib.Path, buckets: list[str]) -> None:
+    """Write compare.md showing thematic divergences across buckets."""
+    rows = []
+    for b in buckets:
+        meta, _ = parse_frontmatter(analysis_path(slug, cache_root, b).read_text(encoding="utf-8"))
+        words = meta.get("total_words_analyzed", 0) or 1
+        unique = meta.get("total_unique", 0)
+        hapax = meta.get("hapax_count", 0)
+        row = {
+            "bucket": b,
+            "transcripts": meta.get("transcripts_analyzed", 0),
+            "words": meta.get("total_words_analyzed", 0),
+            "total_unique": unique,
+            "ttr": meta.get("ttr", 0.0),
+            "hapax_pct": (hapax / unique * 100) if unique else 0.0,
+            "top_100_coverage_pct": meta.get("top_100_coverage_pct", 0.0),
+        }
+        for key, _ in _COMPARE_DIMENSIONS:
+            row[f"{key}_per_1k"] = (meta.get(f"{key}_count", 0) / words) * 1000
+        rows.append(row)
+
+    # Side-by-side table — one column per bucket
+    header = "| Metric | " + " | ".join(r["bucket"] for r in rows) + " |"
+    sep = "|" + "---|" * (len(rows) + 1)
+    table_lines = [header, sep]
+    table_lines.append("| transcripts | " + " | ".join(str(r["transcripts"]) for r in rows) + " |")
+    table_lines.append("| words | " + " | ".join(f"{r['words']:,}" for r in rows) + " |")
+    table_lines.append("| total unique vocab | " + " | ".join(f"{r['total_unique']:,}" for r in rows) + " |")
+    table_lines.append("| TTR | " + " | ".join(f"{r['ttr']:.3f}" for r in rows) + " |")
+    table_lines.append("| hapax % of vocab | " + " | ".join(f"{r['hapax_pct']:.1f}%" for r in rows) + " |")
+    table_lines.append("| top-100 coverage | " + " | ".join(f"{r['top_100_coverage_pct']:.1f}%" for r in rows) + " |")
+    for key, label in _COMPARE_DIMENSIONS:
+        cells = " | ".join(f"{r[f'{key}_per_1k']:.2f}" for r in rows)
+        table_lines.append(f"| {label} (/1k) | {cells} |")
+    table = "\n".join(table_lines)
+
+    # Notable divergences: any pair of non-"all" buckets with >2x ratio on a dimension.
+    # Surfaces "shorts have 4× the promo density of long" style insights.
+    specific = [r for r in rows if r["bucket"] != "all"]
+    divergences = []
+    for key, label in _COMPARE_DIMENSIONS:
+        for i, a in enumerate(specific):
+            for b in specific[i + 1:]:
+                a_rate = a[f"{key}_per_1k"]
+                b_rate = b[f"{key}_per_1k"]
+                if a_rate < 0.1 and b_rate < 0.1:
+                    continue  # both negligible
+                hi, lo = (a, b) if a_rate >= b_rate else (b, a)
+                hi_r, lo_r = (a_rate, b_rate) if a_rate >= b_rate else (b_rate, a_rate)
+                if lo_r > 0 and hi_r / lo_r >= 2:
+                    divergences.append(
+                        f"- **{label}**: `{hi['bucket']}` shows {hi_r/lo_r:.1f}× the rate of `{lo['bucket']}` "
+                        f"({hi_r:.2f} vs {lo_r:.2f} per 1k)"
+                    )
+                elif lo_r == 0 and hi_r > 0.3:
+                    divergences.append(
+                        f"- **{label}**: present in `{hi['bucket']}` ({hi_r:.2f}/1k) but absent in `{lo['bucket']}`"
+                    )
+    divergences_section = "\n".join(divergences) if divergences else "_No >2× divergences detected._"
+
+    # Funnel hypothesis: if shorts have high promo + low fear AND long has high fear,
+    # this looks like a "shorts as teaser for fear-based long-form" pattern.
+    funnel_note = ""
+    by_bucket = {r["bucket"]: r for r in rows}
+    if "shorts" in by_bucket and "long" in by_bucket:
+        s, l = by_bucket["shorts"], by_bucket["long"]
+        if s["promo_per_1k"] >= 1 and l["fear_per_1k"] >= 3:
+            funnel_note = (
+                "\n## Funnel Hypothesis\n\n"
+                f"Shorts show high promotional density ({s['promo_per_1k']:.2f}/1k) "
+                f"while long-form shows high fear/threat density ({l['fear_per_1k']:.2f}/1k). "
+                "This pattern is consistent with using short clips to funnel viewers "
+                "toward fear-driven long-form content.\n"
+            )
+
+    nav = _nav_links(slug, cache_root, "compare")
+    body = (
+        f"# Cross-Bucket Comparison: {slug}\n\n"
+        f"{nav}\n"
+        f"Comparing {len(rows)} buckets: {', '.join(r['bucket'] for r in rows)}.\n"
+        f"Rates per 1,000 words.\n\n"
+        f"## Metrics\n\n{table}\n\n"
+        f"## Notable Divergences\n\n{divergences_section}\n"
+        f"{funnel_note}"
+    )
+    cmp_meta = {
+        "slug": slug,
+        "generated": datetime.date.today().isoformat(),
+        "buckets_compared": [r["bucket"] for r in rows],
+    }
+    out = channel_cache_dir(slug, cache_root) / "compare.md"
+    out.write_text(render_frontmatter(cmp_meta, body), encoding="utf-8")
+    print(f"  Written: compare.md")
+
+
+def cmd_compare(args) -> None:
+    """Standalone: regenerate compare.md from existing analysis-*.md files."""
+    cache_root = get_cache_root(args.cache_dir)
+    slug = args.slug
+    existing = [
+        b for b in ("all", *BUCKET_THRESHOLDS.keys())
+        if analysis_path(slug, cache_root, b).exists()
+    ]
+    if len(existing) < 2:
+        print(
+            f"Need at least 2 bucket analyses for '{slug}'. "
+            f"Run 'yt-analyst analyze {slug}' first.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    _write_compare(slug, cache_root, existing)
+
+
+def _write_global_report(cache_root: pathlib.Path) -> None:
+    """Build INDEX.md at cache root: cross-channel summary with Obsidian wiki links.
+
+    Scans all channel subdirs that have a profile.md (i.e., have been analyzed)
+    and produces a sortable table + per-channel quick cards. This is the entry
+    point for browsing the research collection in Obsidian / SilverBullet.
+    """
+    rows = []
+    if not cache_root.exists():
+        print(f"Cache root not found: {cache_root}", file=sys.stderr)
+        return
+
+    for chan_dir in sorted(cache_root.iterdir()):
+        if not chan_dir.is_dir() or chan_dir.name.startswith("_"):
+            continue
+        prof = chan_dir / "profile.md"
+        if not prof.exists():
+            continue
+        an = chan_dir / "analysis.md"
+        prof_meta, _ = parse_frontmatter(prof.read_text(encoding="utf-8"))
+        an_meta = {}
+        if an.exists():
+            an_meta, _ = parse_frontmatter(an.read_text(encoding="utf-8"))
+
+        # Which buckets have reports?
+        buckets_present = [
+            b for b in ("shorts", "mid", "long")
+            if (chan_dir / f"profile-{b}.md").exists()
+        ]
+        rows.append({
+            "slug": chan_dir.name,
+            "channel": prof_meta.get("channel", chan_dir.name),
+            "transcripts": prof_meta.get("transcripts_used", 0),
+            "words": an_meta.get("total_words_analyzed", 0),
+            "unique": an_meta.get("total_unique", 0),
+            "ttr": an_meta.get("ttr", 0.0),
+            "relevance": prof_meta.get("relevance", 0.0),
+            "accuracy": prof_meta.get("accuracy", 0.0),
+            "generated": prof_meta.get("generated", "—"),
+            "buckets": buckets_present,
+            "has_compare": (chan_dir / "compare.md").exists(),
+            "has_themes": (chan_dir / "themes.md").exists(),
+        })
+
+    if not rows:
+        print(f"No analyzed channels in {cache_root} — nothing to report.", file=sys.stderr)
+        return
+
+    # Sort by transcripts desc (richest research first), then channel name
+    rows.sort(key=lambda r: (-r["transcripts"], r["slug"]))
+
+    # Summary table — one row per channel, link goes to channel index.md
+    table_header = (
+        "| Channel | Transcripts | Words | Unique | TTR | Confidence | Buckets | Last analyzed |\n"
+        "|---|---:|---:|---:|---:|---|---|---|"
+    )
+    table_rows = []
+    for r in rows:
+        chan_link = f"[[{r['slug']}/index\\|{r['channel']}]]"
+        bucket_links = []
+        for b in r["buckets"]:
+            bucket_links.append(f"[[{r['slug']}/profile-{b}\\|{b}]]")
+        bucket_cell = " · ".join(bucket_links) or "—"
+        confidence = f"{r['relevance']:.2f} / {r['accuracy']:.2f}"
+        table_rows.append(
+            f"| {chan_link} | {r['transcripts']} | {r['words']:,} | {r['unique']:,} | "
+            f"{r['ttr']:.3f} | {confidence} | {bucket_cell} | {r['generated']} |"
+        )
+    table = table_header + "\n" + "\n".join(table_rows)
+
+    # Quick-card section — one paragraph per channel with sibling report links
+    cards = []
+    for r in rows:
+        report_links = [f"[[{r['slug']}/profile\\|Voice Profile]]"]
+        if r["has_compare"]:
+            report_links.append(f"[[{r['slug']}/compare\\|Bucket Comparison]]")
+        if r["has_themes"]:
+            report_links.append(f"[[{r['slug']}/themes\\|LLM Themes]]")
+        report_links.append(f"[[{r['slug']}/analysis\\|Full Analysis]]")
+        cards.append(
+            f"### [[{r['slug']}/profile\\|{r['channel']}]]\n\n"
+            f"- **{r['transcripts']} transcripts** · {r['words']:,} words · "
+            f"{r['unique']:,} unique vocab · TTR {r['ttr']:.3f}\n"
+            f"- **Confidence:** relevance {r['relevance']:.2f} · accuracy {r['accuracy']:.2f}\n"
+            f"- **Reports:** {' · '.join(report_links)}"
+        )
+
+    body = (
+        "# Channel Library\n\n"
+        "Cross-channel index of all YouTube voice/personality analyses. "
+        "Click any channel to dive in — every report is interlinked.\n\n"
+        "## Channels\n\n"
+        f"{table}\n\n"
+        "## Quick Profiles\n\n"
+        + "\n\n".join(cards)
+        + "\n"
+    )
+    meta = {
+        "generated": datetime.date.today().isoformat(),
+        "channels_indexed": len(rows),
+        "total_transcripts": sum(r["transcripts"] for r in rows),
+    }
+    out = cache_root / "INDEX.md"
+    out.write_text(render_frontmatter(meta, body), encoding="utf-8")
+    print(f"  Library index: {out}")
+
+
+def cmd_report(args) -> None:
+    """Standalone: regenerate INDEX.md cross-channel summary."""
+    cache_root = get_cache_root(args.cache_dir)
+    _write_global_report(cache_root)
 
 
 def cmd_profile(args) -> None:
@@ -1102,8 +1576,12 @@ def _profile_bucket(slug: str, cache_root: pathlib.Path, bucket: str) -> None:
 
     rhetorical = _rhetorical_style(an_body)
 
-    body = f"""# Voice Profile: {subject}
+    nav = _nav_links(slug, cache_root, f"profile{_bucket_suffix(bucket)}")
+    title_suffix = f" ({bucket})" if bucket != "all" else ""
 
+    body = f"""# Voice Profile: {subject}{title_suffix}
+
+{nav}
 ## How They Sound
 
 {subject} communicates at a {fk_str} reading level with a {tone_str or "varied"} audience address style.
@@ -1255,6 +1733,174 @@ def cmd_status(args) -> None:
     print()
 
 
+# ─── LLM enrichment (opt-in, OpenAI-compatible chat completions) ──────────────
+
+# Env vars — defaults target OpenAI directly but ANY OpenAI-compat endpoint works:
+# Anthropic, Ollama, LM Studio, Sage.is, Groq, Together, Mistral, etc.
+_LLM_ENV = {
+    "url":   ("YT_ANALYST_LLM_URL",   "https://api.openai.com/v1"),
+    "key":   ("YT_ANALYST_LLM_KEY",   None),     # required
+    "model": ("YT_ANALYST_LLM_MODEL", "gpt-4o-mini"),
+}
+
+_ENRICH_PROMPT_TEMPLATE = """You are analyzing the voice and messaging of a YouTube channel from concatenated transcripts.
+
+Channel: {channel}
+Bucket: {bucket}
+Transcripts analyzed: {n}
+Total words: {word_count:,}
+
+Read the transcripts below and produce a concise markdown report with EXACTLY these
+sections (use ## headings):
+
+## Core Themes
+3-5 bullet points. The dominant subjects this channel returns to. One sentence per bullet.
+
+## Primary Intent
+One paragraph: is this channel primarily educational / persuasive / promotional /
+news / opinion / entertainment? What is the creator trying to make the viewer DO
+or BELIEVE?
+
+## Narrative Arc
+How do typical videos build? Problem→solution? Anecdote→thesis? Confrontation?
+Investigative reveal? Refer to specific patterns you noticed.
+
+## Stance / Worldview
+What does the creator value? What do they oppose? What unstated assumptions are
+they working from? Be specific, cite phrases.
+
+## Audience
+Who is this content for? Beginner / expert / niche-insider / lay audience?
+What prior knowledge is assumed?
+{cross_bucket_section}
+Transcripts:
+---
+{combined}
+"""
+
+
+def _llm_complete(content: str, model: str, url: str, key: str) -> str:
+    """OpenAI-compatible chat completion via requests. Returns assistant text."""
+    resp = requests.post(
+        f"{url.rstrip('/')}/chat/completions",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={
+            "model": model,
+            "messages": [{"role": "user", "content": content}],
+            "max_tokens": 2000,
+            "temperature": 0.3,
+        },
+        timeout=180,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
+def _truncate_combined(transcripts: list[dict], max_chars: int) -> str:
+    """Concatenate transcripts with separators, truncating proportionally if over cap."""
+    parts = []
+    for t in transcripts:
+        title = t["meta"].get("title", t["meta"].get("video_id", "?"))
+        parts.append(f"### {title}\n\n{t['body'].strip()}\n")
+    combined = "\n\n".join(parts)
+    if len(combined) <= max_chars:
+        return combined
+    # Trim each transcript proportionally to fit (preserves all videos, just shorter excerpts)
+    ratio = max_chars / len(combined)
+    trimmed_parts = []
+    for t in transcripts:
+        title = t["meta"].get("title", t["meta"].get("video_id", "?"))
+        body = t["body"].strip()
+        keep = int(len(body) * ratio)
+        trimmed_parts.append(f"### {title}\n\n{body[:keep]}\n")
+    return "\n\n".join(trimmed_parts)
+
+
+def cmd_enrich(args) -> None:
+    """LLM-derived themes/intent/stance via OpenAI-compatible chat completions."""
+    cache_root = get_cache_root(args.cache_dir)
+    slug = args.slug
+    bucket = args.bucket
+
+    # Resolve config from env (with defaults)
+    url = os.environ.get(_LLM_ENV["url"][0]) or _LLM_ENV["url"][1]
+    key = os.environ.get(_LLM_ENV["key"][0])
+    model = os.environ.get(_LLM_ENV["model"][0]) or _LLM_ENV["model"][1]
+    if not key:
+        print(
+            f"Error: {_LLM_ENV['key'][0]} not set.\n"
+            f"See docs/llm-enrich.md for configuration examples.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Load transcripts in this bucket
+    tx_dir = channel_cache_dir(slug, cache_root) / "transcripts"
+    if not tx_dir.exists():
+        print(f"No transcripts directory for '{slug}'.", file=sys.stderr)
+        sys.exit(1)
+
+    transcripts = []
+    for f in sorted(tx_dir.glob("*.md")):
+        meta, body = parse_frontmatter(f.read_text(encoding="utf-8"))
+        if not body.strip():
+            continue
+        if bucket != "all":
+            if _bucket_for(meta.get("duration_seconds", 0), meta.get("word_count", 0)) != bucket:
+                continue
+        transcripts.append({"meta": meta, "body": body})
+
+    if not transcripts:
+        print(f"No transcripts in bucket '{bucket}' for '{slug}'.", file=sys.stderr)
+        sys.exit(1)
+
+    combined = _truncate_combined(transcripts, args.max_chars)
+    word_count = sum(len(t["body"].split()) for t in transcripts)
+    channel = transcripts[0]["meta"].get("channel", slug)
+
+    cross_bucket_section = (
+        "\n## Cross-bucket Note\nHow does this bucket's voice differ from the channel's overall voice?\n"
+        if bucket != "all" else ""
+    )
+    prompt = _ENRICH_PROMPT_TEMPLATE.format(
+        channel=channel, bucket=bucket, n=len(transcripts),
+        word_count=word_count, cross_bucket_section=cross_bucket_section,
+        combined=combined,
+    )
+
+    # ~4 chars/token rough estimate, transparent so user can decide
+    est_tokens = len(prompt) // 4
+    print(f"Enriching '{slug}' [{bucket}]:")
+    print(f"  endpoint: {url}")
+    print(f"  model:    {model}")
+    print(f"  input:    ~{est_tokens:,} tokens ({len(prompt):,} chars, {len(transcripts)} transcripts)")
+    if not args.yes:
+        confirm = input("Proceed? [y/N] ").strip().lower()
+        if confirm != "y":
+            print("Cancelled.")
+            return
+
+    print("Calling LLM...")
+    result = _llm_complete(prompt, model, url, key)
+
+    enrich_meta = {
+        "subject": channel,
+        "channel": channel,
+        "bucket": bucket,
+        "generated": datetime.date.today().isoformat(),
+        "transcripts_used": len(transcripts),
+        "words_sent": word_count,
+        "llm_endpoint": url,
+        "llm_model": model,
+    }
+    out = channel_cache_dir(slug, cache_root) / f"themes{_bucket_suffix(bucket)}.md"
+    nav = _nav_links(slug, cache_root, f"themes{_bucket_suffix(bucket)}")
+    title_suffix = f" ({bucket})" if bucket != "all" else ""
+    body_with_nav = f"# LLM Themes: {channel}{title_suffix}\n\n{nav}\n{result}"
+    out.write_text(render_frontmatter(enrich_meta, body_with_nav), encoding="utf-8")
+    print(f"Themes written: {out}")
+
+
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -1305,6 +1951,28 @@ def main() -> None:
     p = sub.add_parser("status", parents=[shared], help="Show fetch progress and confidence scores")
     p.add_argument("slug", help="Channel slug")
 
+    p = sub.add_parser("compare", parents=[shared], help="Cross-bucket metrics comparison (auto-runs at end of analyze)")
+    p.add_argument("slug", help="Channel slug")
+
+    sub.add_parser("report", parents=[shared], help="Regenerate INDEX.md cross-channel library (auto-runs at end of analyze)")
+
+    p = sub.add_parser(
+        "enrich", parents=[shared],
+        help="LLM-derived themes/intent/stance (opt-in, OpenAI-compatible API)",
+    )
+    p.add_argument("slug", help="Channel slug")
+    p.add_argument(
+        "--bucket",
+        choices=["all", *BUCKET_THRESHOLDS.keys()],
+        default="all",
+        help="Which bucket to enrich (default: all)",
+    )
+    p.add_argument("--yes", action="store_true", help="Skip cost confirmation prompt")
+    p.add_argument(
+        "--max-chars", type=int, default=80_000, metavar="N",
+        help="Cap on combined transcript chars sent to LLM (default: 80,000)",
+    )
+
     args = parser.parse_args()
     {
         "discover": cmd_discover,
@@ -1314,6 +1982,9 @@ def main() -> None:
         "analyze": cmd_analyze,
         "profile": cmd_profile,
         "status": cmd_status,
+        "compare": cmd_compare,
+        "report": cmd_report,
+        "enrich": cmd_enrich,
     }[args.command](args)
 
 

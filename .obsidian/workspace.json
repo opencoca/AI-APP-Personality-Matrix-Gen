@@ -4,16 +4,16 @@
     "type": "split",
     "children": [
       {
-        "id": "2259ea892ae446c7",
+        "id": "7ed17bdd0d150b91",
         "type": "tabs",
         "children": [
           {
-            "id": "18040938437f8c54",
+            "id": "021a984256473f07",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "scripts/yt-cache/ai-in-context/analysis.md",
+                "file": "scripts/yt-cache/natebjones/analysis.md",
                 "mode": "source",
                 "source": false
               },
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "scripts/yt-cache/ai-in-context/analysis.md",
+                "file": "scripts/yt-cache/natebjones/analysis.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -113,7 +113,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "scripts/yt-cache/ai-in-context/analysis.md",
+                "file": "scripts/yt-cache/natebjones/analysis.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -156,7 +156,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "scripts/yt-cache/ai-in-context/analysis.md",
+                "file": "scripts/yt-cache/natebjones/analysis.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -183,43 +183,43 @@
       "bases:Create new base": false
     }
   },
-  "active": "18040938437f8c54",
+  "active": "021a984256473f07",
   "lastOpenFiles": [
-    "scripts/yt-cache/tech-nomics-top/profile-mid.md",
-    "scripts/yt-cache/tech-nomics-top/profile.md",
-    "scripts/yt-cache/tech-nomics-top/analysis-mid.md",
-    "scripts/yt-cache/tech-nomics-top/analysis.md",
-    "scripts/yt-cache/ai-in-context/profile-long.md",
-    "scripts/yt-cache/ai-in-context/profile-mid.md",
-    "scripts/yt-cache/ai-in-context/profile-shorts.md",
-    "scripts/yt-cache/ai-in-context/analysis-long.md",
-    "scripts/yt-cache/ai-in-context/analysis-mid.md",
-    "scripts/yt-cache/ai-in-context/analysis-shorts.md",
-    "scripts/yt-cache/ai-in-context/transcripts/Nl7-bRFSZBs.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/wF5kwCjLCtI.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/ywh8Hp-ZVUM.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/AnrZktFfbUI.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/Oy0DKRFstU4.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/RwE6swpMDFk.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/lBUYL6nVcAQ.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/Vr7YAvYdv1w.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/YX0j2KSkr0A.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/wb_ZY0-Imzc.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/iUN86olX9r8.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/ED7blMEYHmU.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/Y1yzaYB5yv8.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/9F65QGgCXpg.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/tOCSyRAaFHc.md",
-    "scripts/yt-cache/tech-nomics-top/transcripts/vjy4TbhDr_Y.md",
+    "scripts/yt-cache/about-that-top/transcripts/mqEEFvr9keI.md",
+    "scripts/yt-cache/about-that-top/transcripts/woCTR--uvFM.md",
+    "scripts/yt-cache/about-that-top/transcripts/cw0R0EOEEyA.md",
+    "scripts/yt-cache/about-that-top/transcripts/gsNQuCyBvUY.md",
+    "scripts/yt-cache/about-that-top/transcripts/dcpehUVAx0k.md",
+    "scripts/yt-cache/about-that-top/transcripts/lHoZUxtsVW0.md",
+    "scripts/yt-cache/about-that-top/transcripts/PWhv-06DNjE.md",
+    "scripts/yt-cache/about-that-top/transcripts/vucON8ZKTec.md",
+    "scripts/yt-cache/about-that-top/transcripts/z6QlFpPMPKQ.md",
+    "scripts/yt-cache/about-that-top/transcripts",
+    "scripts/yt-cache/about-that-top/index.md",
+    "scripts/yt-cache/about-that-top",
+    "scripts/yt-cache/about-that/index.md",
+    "scripts/yt-cache/about-that",
+    "scripts/yt-cache/w3wfocus/profile-long.md",
+    "scripts/yt-cache/w3wfocus/profile-mid.md",
+    "scripts/yt-cache/w3wfocus/profile.md",
+    "scripts/yt-cache/w3wfocus/compare.md",
+    "scripts/yt-cache/w3wfocus/analysis-long.md",
+    "scripts/yt-cache/w3wfocus/analysis-mid.md",
+    "scripts/yt-cache/w3wfocus/analysis.md",
+    "scripts/yt-cache/w3wfocus/transcripts/DAPVAkLiVp4.md",
+    "scripts/yt-cache/w3wfocus/transcripts/FqPqmkY2ArI.md",
+    "scripts/yt-cache/w3wfocus/transcripts/z4Cj4l9G7oI.md",
+    "scripts/yt-cache/w3wfocus/transcripts/_sZbsgvvkS4.md",
+    "scripts/yt-cache/w3wfocus/transcripts/SkcyysBt0Ew.md",
+    "scripts/yt-cache/w3wfocus/transcripts",
+    "scripts/yt-cache/w3wfocus/index.md",
+    "scripts/yt-cache/w3wfocus",
+    "scripts/yt-cache/INDEX.md",
+    "scripts/yt-cache/casey-latest/analysis-mid.md",
     "scripts/yt-cache/tech-nomics-top/transcripts",
     "scripts/yt-cache/tech-nomics-top",
     "scripts/yt-cache/tech-nomics",
     "scripts/yt-cache/ai-in-context/transcripts",
-    "scripts/yt-cache/ai-in-context",
-    "scripts/yt-cache/vanneistat-top/transcripts",
-    "scripts/yt-cache/vanneistat-top",
-    "scripts/yt-cache/vanneistat",
-    "scripts/yt-cache/casey-top/transcripts",
-    "scripts/yt-cache/casey-top"
+    "scripts/yt-cache/ai-in-context"
   ]
 }
