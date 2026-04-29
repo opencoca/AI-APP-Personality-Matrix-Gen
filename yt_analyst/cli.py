@@ -1483,9 +1483,17 @@ def _write_global_report(cache_root: pathlib.Path) -> None:
         ]
         unique = an_meta.get("total_unique", 0)
         hapax = an_meta.get("hapax_count", 0)
+        # Disambiguate strategy forks — `casey-top` and `casey-latest` both
+        # carry channel_name="casey" from the fork; without the suffix they
+        # render identically in the library and look like duplicates.
+        display_name = prof_meta.get("channel", chan_dir.name)
+        for strat in ("top", "latest", "random"):
+            if chan_dir.name.endswith(f"-{strat}"):
+                display_name = f"{display_name} ({strat})"
+                break
         rows.append({
             "slug": chan_dir.name,
-            "channel": prof_meta.get("channel", chan_dir.name),
+            "channel": display_name,
             "transcripts": prof_meta.get("transcripts_used", 0),
             "words": an_meta.get("total_words_analyzed", 0),
             "unique": unique,
