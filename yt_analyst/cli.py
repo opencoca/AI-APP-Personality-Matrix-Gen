@@ -733,6 +733,15 @@ def cmd_fetch(args) -> None:
     request_count = 0
     next_pause_at = random.randint(pe_min, pe_max)
 
+    # Poka-yoke: when N consecutive videos all return "unavailable", that's
+    # almost always a systemic problem (stale cookies, IP block, MCP down)
+    # rather than every video genuinely lacking captions. Detect and bail with
+    # a clear remediation message — and revert the false `failed` markings
+    # so the videos retry on next run.
+    consecutive_unavailable = 0
+    recent_unavailable: list[dict] = []
+    SYSTEMIC_UNAVAILABLE_THRESHOLD = 5
+
     for video in candidates:
         if request_count >= max_per_session:
             print(f"Session limit ({max_per_session}) reached. Run again to continue.")
@@ -787,8 +796,37 @@ def cmd_fetch(args) -> None:
                 video["status"] = "failed"
                 video["error"] = "unavailable"
                 video["failed_date"] = now_iso()
+                consecutive_unavailable += 1
+                recent_unavailable.append(video)
                 write_index(slug, meta, _index_body(meta, slug, cache_root), cache_root)
+
+                if consecutive_unavailable >= SYSTEMIC_UNAVAILABLE_THRESHOLD:
+                    # Revert these videos so they retry on next run after the
+                    # underlying issue (cookies/IP/MCP) is fixed.
+                    for v in recent_unavailable:
+                        v["status"] = "selected"
+                        v.pop("error", None)
+                        v.pop("failed_date", None)
+                    write_index(slug, meta, _index_body(meta, slug, cache_root), cache_root)
+
+                    print(
+                        f"\n🛑 {consecutive_unavailable} consecutive 'unavailable' responses with no successes.\n"
+                        f"   Most YouTube channels have at least some captioned videos, so this is\n"
+                        f"   almost always a systemic issue rather than every video lacking captions.\n"
+                        f"\n   Common causes & fixes:\n"
+                        f"     • Stale cookies   →  python scripts/refresh-yt-cookies.py\n"
+                        f"     • IP block        →  try a VPN, different network, or wait\n"
+                        f"     • MCP down        →  docker logs youtube-transcribe-server-mcpo\n"
+                        f"\n   These {consecutive_unavailable} videos have been reset to 'selected' and will\n"
+                        f"   be retried on the next 'fetch {slug}' run after you fix the cause.",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
                 continue
+
+            # Real success — reset the consecutive-failure counter
+            consecutive_unavailable = 0
+            recent_unavailable = []
 
             word_ct = count_words(content)
             tx_meta = {
@@ -848,6 +886,20 @@ def cmd_fetch_one(args) -> None:
 
     if status != 200:
         print(f"Error: HTTP {status}: {content}", file=sys.stderr)
+        sys.exit(1)
+
+    # Content guard (parity with cmd_fetch): MCP returns 200 + error string for
+    # gated/unavailable videos AND for IP-block conditions. Without this guard
+    # we'd happily save the error message as a fake "transcript" — exactly the
+    # bug that hid the IP block during William Gallagher debugging.
+    if content.lstrip().startswith("Error:") or "Could not retrieve a transcript" in content:
+        print(
+            f"✗ MCP returned an error string instead of a transcript:\n"
+            f"  {content.strip().splitlines()[0][:160]}\n"
+            f"  Common causes: stale cookies (refresh-yt-cookies.py), IP block, "
+            f"members-only / no-captions video.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     cache_root = get_cache_root(args.cache_dir)
@@ -1483,17 +1535,9 @@ def _write_global_report(cache_root: pathlib.Path) -> None:
         ]
         unique = an_meta.get("total_unique", 0)
         hapax = an_meta.get("hapax_count", 0)
-        # Disambiguate strategy forks — `casey-top` and `casey-latest` both
-        # carry channel_name="casey" from the fork; without the suffix they
-        # render identically in the library and look like duplicates.
-        display_name = prof_meta.get("channel", chan_dir.name)
-        for strat in ("top", "latest", "random"):
-            if chan_dir.name.endswith(f"-{strat}"):
-                display_name = f"{display_name} ({strat})"
-                break
         rows.append({
             "slug": chan_dir.name,
-            "channel": display_name,
+            "channel": prof_meta.get("channel", chan_dir.name),
             "transcripts": prof_meta.get("transcripts_used", 0),
             "words": an_meta.get("total_words_analyzed", 0),
             "unique": unique,
@@ -1516,6 +1560,21 @@ def _write_global_report(cache_root: pathlib.Path) -> None:
 
     # Sort by transcripts desc (richest research first), then channel name
     rows.sort(key=lambda r: (-r["transcripts"], r["slug"]))
+
+    # Disambiguate any rows that share a display name. This is the poka-yoke
+    # backstop for strategy forks (casey-top + casey-latest both have
+    # channel_name="casey"), accidental duplicates, or any future fork pattern —
+    # we don't enumerate strategy names, we just react to actual collisions.
+    name_counts = collections.Counter(r["channel"] for r in rows)
+    for r in rows:
+        if name_counts[r["channel"]] > 1:
+            chan_slug = slugify(r["channel"])
+            if r["slug"].startswith(f"{chan_slug}-"):
+                # Slug follows {channel}-{suffix} pattern → use clean suffix
+                r["channel"] = f"{r['channel']} ({r['slug'][len(chan_slug) + 1:]})"
+            else:
+                # Fallback: use the slug itself as the disambiguator
+                r["channel"] = f"{r['channel']} [{r['slug']}]"
 
     # Summary table — one row per channel, link goes to channel index.md.
     # Top-100% and Hapax% expose vocabulary variation: high Top-100 = repetitive

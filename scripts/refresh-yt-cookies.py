@@ -211,6 +211,58 @@ def update_env_file(key: str, value: str) -> None:
 
 # ── Main ────────────────────────────────────────────────────────────────────
 
+def hot_swap_cookies(cookies: dict[str, str]) -> bool:
+    """Try the in-process hot-swap endpoint. Returns True on success.
+
+    Uses the `set_youtube_cookies` MCP tool exposed by mcpo. Avoids the full
+    container restart (and Cloudflare tunnel URL churn) when the running image
+    is new enough to expose this endpoint. Falls back to recreate if not.
+    """
+    import json as _json
+
+    # Resolve MCP URL + token from .env (same source yt-analyst uses)
+    url, token = "http://localhost:8000", ""
+    if ENV_FILE.exists():
+        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+            if line.startswith("YT_ANALYST_MCP_URL="):
+                url = line.split("=", 1)[1].strip()
+            elif line.startswith("YT_ANALYST_MCP_TOKEN="):
+                token = line.split("=", 1)[1].strip()
+    if not token:
+        print("  Hot-swap skipped: YT_ANALYST_MCP_TOKEN not in .env")
+        return False
+
+    try:
+        import urllib.request
+        import urllib.error
+        req = urllib.request.Request(
+            f"{url.rstrip('/')}/set_youtube_cookies",
+            data=_json.dumps({"cookies_json": _json.dumps(cookies)}).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = resp.read().decode()
+            if resp.status == 200:
+                print(f"  ✅ Hot-swap response: {body[:120]}")
+                return True
+            print(f"  Hot-swap failed (HTTP {resp.status}): {body[:200]}")
+            return False
+    except urllib.error.HTTPError as e:
+        # 404 = old image without the endpoint → fall back to recreate
+        if e.code == 404:
+            print(f"  Hot-swap endpoint not present (HTTP 404) — falling back to container recreate")
+        else:
+            print(f"  Hot-swap HTTP error: {e.code} {e.reason} — falling back to recreate")
+        return False
+    except Exception as e:
+        print(f"  Hot-swap error: {e} — falling back to recreate")
+        return False
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -219,9 +271,11 @@ def main() -> None:
     ap.add_argument("--container", default=CONTAINER_NAME,
                     help=f"Container name (default: {CONTAINER_NAME})")
     ap.add_argument("--no-env-update", action="store_true",
-                    help="Don't patch .env with the new tunnel URL")
+                    help="Don't patch .env with the new tunnel URL (recreate path only)")
     ap.add_argument("--server-cmd", nargs=argparse.REMAINDER, default=None,
                     help="Override server startup CMD (default: auto-detected or built-in)")
+    ap.add_argument("--force-recreate", action="store_true",
+                    help="Skip the hot-swap endpoint and force a full container recreate")
     args = ap.parse_args()
 
     print("🍪  Extracting fresh YouTube cookies from Zen browser...")
@@ -230,6 +284,16 @@ def main() -> None:
     if not cookies:
         sys.exit("No YouTube cookies found in Zen profile.")
     print(f"  Found {len(cookies)} cookies: {', '.join(sorted(cookies))}")
+
+    # Try the hot-swap endpoint first (no restart, no URL churn). Falls back
+    # to full container recreate if the endpoint isn't present (old image)
+    # or the user passed --force-recreate.
+    if not args.force_recreate and not args.dry_run:
+        print("\n♻️   Attempting hot-swap via /set_youtube_cookies endpoint...")
+        if hot_swap_cookies(cookies):
+            print("\n✅  Cookies hot-swapped — no container restart, no URL change.")
+            return
+        print("    Falling back to full container recreate.\n")
 
     # Build cookie env vars
     cookie_env: dict[str, str] = {}
