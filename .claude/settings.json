@@ -15,7 +15,8 @@
       "Bash(curl -s http://localhost:8000/)",
       "WebSearch",
       "Bash(uv pip *)",
-      "Bash(awk '/## Variation Index/,/## Quick Profiles/' scripts/yt-cache/INDEX.md)"
+      "Bash(awk '/## Variation Index/,/## Quick Profiles/' scripts/yt-cache/INDEX.md)",
+      "Bash(python3 scripts/refresh-yt-cookies.py)"
     ]
   }
 }
